@@ -19,6 +19,12 @@ use crate::features::auth::{
     service::AuthService,
     tokens::TokenService,
 };
+use crate::features::storage::{
+    api::{StorageApiDoc, StorageApiState},
+    repository::StorageRepository,
+    service::StorageService,
+    store::LocalFileStore,
+};
 
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
 
@@ -104,25 +110,51 @@ async fn main() -> std::io::Result<()> {
     ));
 
     let auth_repo = Arc::new(AuthRepository::new(pool.clone()));
-    let auth_service = Arc::new(AuthService::new(auth_repo, token_service));
+    let auth_service = Arc::new(AuthService::new(auth_repo, token_service.clone()));
 
     let auth_state = web::Data::new(AuthApiState {
         auth_service: auth_service.clone(),
     });
 
+    // Storage setup
+    let file_store = Arc::new(
+        LocalFileStore::new(&config.storage_path).unwrap_or_else(|e| {
+            error!("{}", e);
+            std::process::exit(1);
+        }),
+    );
+
+    let storage_repo = Arc::new(StorageRepository::new(pool.clone()));
+    let storage_service = Arc::new(StorageService::new(storage_repo, file_store));
+
+    let storage_state = web::Data::new(StorageApiState {
+        storage_service: storage_service.clone(),
+    });
+
+    // Shared token service for the auth extractor used in protected endpoints
+    let token_service_data = web::Data::new(token_service.clone());
+
     let pool_data = web::Data::new(pool.clone());
     let bind_addr = format!("0.0.0.0:{}", config.port);
 
+    info!("Storage path: {}", config.storage_path);
     info!("Listening on {}", bind_addr);
 
     HttpServer::new(move || {
-        let openapi = AuthApiDoc::openapi();
+        let mut openapi = AuthApiDoc::openapi();
+        openapi.merge(StorageApiDoc::openapi());
 
         App::new()
             .app_data(pool_data.clone())
             .app_data(auth_state.clone())
+            .app_data(storage_state.clone())
+            .app_data(token_service_data.clone())
             .service(health)
-            .service(web::scope("/api/v1").configure(features::auth::api::configure))
+            .service(
+                web::scope("/api/v1")
+                    .configure(features::auth::api::configure)
+                    .configure(features::storage::api::configure),
+            )
             .service(
                 SwaggerUi::new("/swagger-ui/{_:.*}")
                     .url("/api-docs/openapi.json", openapi),

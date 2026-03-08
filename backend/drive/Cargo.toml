@@ -24,3 +24,8 @@ utoipa-swagger-ui = { version = "6", features = ["actix-web"] }
 thiserror = "1"
 libsqlite3-sys = { version = "0.27", features = ["bundled"] }
 hex = "0.4"
+actix-multipart = "0.7"
+actix-files = "0.6"
+futures-util = "0.3"
+mime_guess = "2"
+mime = "0.3"

@@ -15,12 +15,12 @@ A phased roadmap for building a Google Drive-competitive cloud storage and colla
 - [x] Implement Authentication & Authuerization
 
 ### 1.1 Cloud Storage Engine
-- [ ] Design storage backend (object storage layer, e.g. S3-compatible)
-- [ ] Implement file upload with multipart support (files up to 10 GB)
-- [ ] Implement file download with resume support
-- [ ] Enforce per-user storage quotas
-- [ ] Track per-user daily upload cap
-- [ ] Store and retrieve file metadata (name, size, type, owner, created/modified timestamps)
+- [x] Design storage backend (object storage layer, e.g. S3-compatible)
+- [x] Implement file upload with multipart support (files up to 10 GB)
+- [x] Implement file download with resume support
+- [x] Enforce per-user storage quotas
+- [x] Track per-user daily upload cap
+- [x] Store and retrieve file metadata (name, size, type, owner, created/modified timestamps)
 
 ### 1.2 File System & Organization
 - [ ] Data model: files, folders, nested folder hierarchy

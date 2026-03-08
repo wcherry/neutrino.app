@@ -8,6 +8,7 @@ pub struct Config {
     pub jwt_access_expiry_secs: u64,
     pub jwt_refresh_expiry_secs: u64,
     pub log_level: String,
+    pub storage_path: String,
 }
 
 impl Config {
@@ -38,6 +39,9 @@ impl Config {
 
         let log_level = env::var("LOG_LEVEL").unwrap_or_else(|_| "info".to_string());
 
+        let storage_path =
+            env::var("STORAGE_PATH").unwrap_or_else(|_| "./storage".to_string());
+
         Ok(Config {
             database_url,
             port,
@@ -45,6 +49,7 @@ impl Config {
             jwt_access_expiry_secs,
             jwt_refresh_expiry_secs,
             log_level,
+            storage_path,
         })
     }
 }
