@@ -1,0 +1,7 @@
+[workspace]
+members = [
+    "drive",
+    "shared",
+    "worker",
+]
+resolver = "2"

@@ -1,0 +1,11 @@
+[package]
+name = "worker"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+shared = { path = "../shared" }
+log = "0.4"
+env_logger = "0.11"
+tokio = { version = "1", features = ["full"] }
+dotenvy = "0.15"
