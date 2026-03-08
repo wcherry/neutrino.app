@@ -158,8 +158,7 @@ Examples:
 
 auth
 users
-articles
-feeds
+storage
 search
 notifications
 
@@ -237,49 +236,50 @@ Core business logic must not depend on:
 
 5. Recommended Project Structure
 
-Example backend layout:
+**Example backend workspace layout:**
+/backend
+	/drive - drive application
+	/sheets - sheets application
+	/docs - docs application
+	/slides - slide application
+	/shared - shared library
+	/worker - worker async application
 
+**Example application layout:**
 src/
+	main.rs	
+	migrations/ - diesel migrations scripts (SQL)
+	features/
+		mod.rs
 
-main.rs
+		storage/
+			mod.rs
+			api.rs
+			service.rs
+			dto.rs
+			model.rs
+			repository.rs
 
-core/
-    mod.rs
+		auth/
+			mod.rs
+			api.rs
+			dto.rs
+			service.rs
+			tokens.rs
+			repository.rs
 
-    users/
-        mod.rs
-        service.rs
-        model.rs
-        repository.rs
+		usage/
+			mod.rs
+			api.rs
+			service.rs
+			models.rs
 
-    auth/
-        mod.rs
-        service.rs
-        tokens.rs
+		shared/       - shared internally between features
+			mod.rs
 
-    feeds/
-        mod.rs
-        service.rs
-        models.rs
-
-api/
-    mod.rs
-    routes.rs
-    handlers/
-
-infrastructure/
-    mod.rs
-
-    database/
-    cache/
-    email/
-    queue/
-
-config/
-    mod.rs
-
-background/
-    workers/
+	config/
+		mod.rs
+		middleware
 
 
 ⸻
@@ -357,7 +357,7 @@ Avoid returning raw system errors.
 Database logic must be isolated in repository layers.
 
 Responsibilities of repositories:
-	•	SQL queries
+	•	diesel queries
 	•	database transactions
 	•	persistence mapping
 
@@ -527,3 +527,14 @@ The backend should prioritize:
 	4.	Reliability over speed of development
 
 The system should remain understandable by a new engineer within days, not months.
+
+16. Misc
+	1. Use actix macros to define endpoints
+	2. Use service configuration to create routes
+	```	pub fn configure(conf: &mut web::ServiceConfig) {
+	    	conf.service(
+        		web::scope("/storage")
+            		.service(create_file)
+					...
+	```
+

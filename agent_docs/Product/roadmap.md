@@ -8,6 +8,12 @@ A phased roadmap for building a Google Drive-competitive cloud storage and colla
 
 **Goal:** Users can store, organize, and access files from a web browser. A working, reliable foundation.
 
+### 1.0 Boot strapping
+- [x] Create cargo workspaces and initialization
+- [x] Create drive(api), shared, and worker projects
+- [x] Add healthcheck - checks DB for now
+- [x] Implement Authentication & Authuerization
+
 ### 1.1 Cloud Storage Engine
 - [ ] Design storage backend (object storage layer, e.g. S3-compatible)
 - [ ] Implement file upload with multipart support (files up to 10 GB)
