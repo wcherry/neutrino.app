@@ -192,7 +192,7 @@ impl FilesystemRepository {
 
         // Apply each optional update in sequence
         if let Some(n) = name {
-            diesel::update(base.clone())
+            diesel::update(base)
                 .set((files::name.eq(n), files::updated_at.eq(now)))
                 .execute(&mut conn)
                 .map_err(|e| {
@@ -203,10 +203,10 @@ impl FilesystemRepository {
 
         if let Some(fid) = folder_id {
             match fid {
-                Some(id) => diesel::update(base.clone())
+                Some(id) => diesel::update(base)
                     .set((files::folder_id.eq(Some(id)), files::updated_at.eq(now)))
                     .execute(&mut conn),
-                None => diesel::update(base.clone())
+                None => diesel::update(base)
                     .set((files::folder_id.eq(None::<String>), files::updated_at.eq(now)))
                     .execute(&mut conn),
             }
@@ -217,7 +217,7 @@ impl FilesystemRepository {
         }
 
         if let Some(starred) = is_starred {
-            diesel::update(base.clone())
+            diesel::update(base)
                 .set((files::is_starred.eq(starred), files::updated_at.eq(now)))
                 .execute(&mut conn)
                 .map_err(|e| {

@@ -72,9 +72,8 @@ impl StorageService {
             storage_path: &storage_path,
         };
 
-        let file = self.repo.insert_file(new_file).map_err(|e| {
+        let file = self.repo.insert_file(new_file).inspect_err(|e| {
             let _ = std::fs::remove_file(&final_path);
-            e
         })?;
 
         if let Err(e) = self.repo.update_quota_after_upload(
