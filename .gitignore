@@ -23,3 +23,5 @@ Cargo.lock
 
 # Logs
 *.log
+
+target/**

@@ -23,15 +23,15 @@ A phased roadmap for building a Google Drive-competitive cloud storage and colla
 - [x] Store and retrieve file metadata (name, size, type, owner, created/modified timestamps)
 
 ### 1.2 File System & Organization
-- [ ] Data model: files, folders, nested folder hierarchy
-- [ ] Create, rename, and delete files and folders
-- [ ] Move files between folders
+- [x] Data model: files, folders, nested folder hierarchy
+- [x] Create, rename, and delete files and folders
+- [x] Move files between folders
 - [ ] Drag-and-drop file organization (web UI)
-- [ ] Star/favorite files for quick access
-- [ ] Color-label folders
-- [ ] Shortcuts — link a file into multiple folders without duplication
-- [ ] Bulk select: move, delete, download multiple items at once
-- [ ] Trash with 30-day retention and restore
+- [x] Star/favorite files for quick access
+- [x] Color-label folders
+- [x] Shortcuts — link a file into multiple folders without duplication
+- [x] Bulk select: move, delete, download multiple items at once
+- [x] Trash with 30-day retention and restore
 
 ### 1.3 File Preview
 - [ ] In-browser viewer for PDF

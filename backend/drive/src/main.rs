@@ -19,6 +19,11 @@ use crate::features::auth::{
     service::AuthService,
     tokens::TokenService,
 };
+use crate::features::filesystem::{
+    api::{FilesystemApiDoc, FilesystemApiState},
+    repository::FilesystemRepository,
+    service::FilesystemService,
+};
 use crate::features::storage::{
     api::{StorageApiDoc, StorageApiState},
     repository::StorageRepository,
@@ -125,10 +130,17 @@ async fn main() -> std::io::Result<()> {
     );
 
     let storage_repo = Arc::new(StorageRepository::new(pool.clone()));
-    let storage_service = Arc::new(StorageService::new(storage_repo, file_store));
+    let storage_service = Arc::new(StorageService::new(storage_repo, file_store.clone()));
 
     let storage_state = web::Data::new(StorageApiState {
         storage_service: storage_service.clone(),
+    });
+
+    // Filesystem setup
+    let fs_repo = Arc::new(FilesystemRepository::new(pool.clone()));
+    let fs_service = Arc::new(FilesystemService::new(fs_repo, file_store));
+    let fs_state = web::Data::new(FilesystemApiState {
+        filesystem_service: fs_service,
     });
 
     // Shared token service for the auth extractor used in protected endpoints
@@ -143,17 +155,20 @@ async fn main() -> std::io::Result<()> {
     HttpServer::new(move || {
         let mut openapi = AuthApiDoc::openapi();
         openapi.merge(StorageApiDoc::openapi());
+        openapi.merge(FilesystemApiDoc::openapi());
 
         App::new()
             .app_data(pool_data.clone())
             .app_data(auth_state.clone())
             .app_data(storage_state.clone())
+            .app_data(fs_state.clone())
             .app_data(token_service_data.clone())
             .service(health)
             .service(
                 web::scope("/api/v1")
                     .configure(features::auth::api::configure)
-                    .configure(features::storage::api::configure),
+                    .configure(features::storage::api::configure)
+                    .configure(features::filesystem::api::configure),
             )
             .service(
                 SwaggerUi::new("/swagger-ui/{_:.*}")

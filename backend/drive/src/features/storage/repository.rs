@@ -52,6 +52,7 @@ impl StorageRepository {
             ($col:expr) => {{
                 let base = files::table
                     .filter(files::user_id.eq(user_id))
+                    .filter(files::is_trashed.eq(false))
                     .select(FileRecord::as_select())
                     .limit(query.limit)
                     .offset(query.offset);

@@ -14,6 +14,10 @@ pub struct FileRecord {
     pub storage_path: String,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
+    pub folder_id: Option<String>,
+    pub is_starred: bool,
+    pub is_trashed: bool,
+    pub trashed_at: Option<NaiveDateTime>,
 }
 
 #[derive(Debug, Insertable)]

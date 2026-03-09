@@ -19,6 +19,8 @@ pub struct FileMetadataResponse {
     pub name: String,
     pub size_bytes: i64,
     pub mime_type: String,
+    pub folder_id: Option<String>,
+    pub is_starred: bool,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
 }
@@ -30,6 +32,8 @@ impl From<FileRecord> for FileMetadataResponse {
             name: f.name,
             size_bytes: f.size_bytes,
             mime_type: f.mime_type,
+            folder_id: f.folder_id,
+            is_starred: f.is_starred,
             created_at: f.created_at,
             updated_at: f.updated_at,
         }
