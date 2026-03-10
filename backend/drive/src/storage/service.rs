@@ -1,7 +1,10 @@
 use crate::shared::{ApiError, ListQuery};
 use crate::storage::{
-    dto::{FileMetadataResponse, FileOrderField, ListFilesResponse, QuotaResponse},
-    model::NewFileRecord,
+    dto::{
+        FileMetadataResponse, FileOrderField, FileVersionResponse, ListFilesResponse,
+        ListVersionsResponse, QuotaResponse,
+    },
+    model::{NewFileRecord, NewFileVersionRecord, UpdateFileContent},
     repository::StorageRepository,
     store::LocalFileStore,
 };
@@ -9,6 +12,8 @@ use chrono::Utc;
 use std::path::Path;
 use std::sync::Arc;
 use uuid::Uuid;
+
+const MAX_VERSIONS: i64 = 100;
 
 pub struct StorageService {
     repo: Arc<StorageRepository>,
@@ -22,6 +27,7 @@ impl StorageService {
 
     /// Called after a file has been streamed to `temp_path`.
     /// Enforces per-user quota and daily cap, then commits the upload.
+    /// Automatically creates version 1 for the new file.
     pub fn finalize_upload(
         &self,
         user_id: &str,
@@ -37,7 +43,6 @@ impl StorageService {
         let reset_daily = quota.daily_reset_at.date() < today;
         let current_daily = if reset_daily { 0 } else { quota.daily_upload_bytes };
 
-        // Enforce quota limits if set
         if let Some(limit) = quota.quota_bytes {
             if quota.used_bytes + size_bytes > limit {
                 return Err(ApiError::new(413, "QUOTA_EXCEEDED", "Storage quota exceeded"));
@@ -55,13 +60,12 @@ impl StorageService {
 
         let file_id = Uuid::new_v4().to_string();
         let final_path = self.store.file_path(user_id, &file_id);
+        let storage_key = self.store.file_key(user_id, &file_id);
 
         std::fs::rename(temp_path, &final_path).map_err(|e| {
             log::error!("Failed to move temp file to final path: {:?}", e);
             ApiError::internal("Failed to save uploaded file")
         })?;
-
-        let storage_path = final_path.to_string_lossy().to_string();
 
         let new_file = NewFileRecord {
             id: &file_id,
@@ -69,10 +73,10 @@ impl StorageService {
             name: file_name,
             size_bytes,
             mime_type,
-            storage_path: &storage_path,
+            storage_path: &storage_key,
         };
 
-        let file = self.repo.insert_file(new_file).inspect_err(|e| {
+        let file = self.repo.insert_file(new_file).inspect_err(|_| {
             let _ = std::fs::remove_file(&final_path);
         })?;
 
@@ -87,7 +91,198 @@ impl StorageService {
             log::error!("Quota update failed for user {}: {:?}", user_id, e);
         }
 
+        // Create version 1 snapshot (best-effort; failure doesn't block upload)
+        self.create_version_snapshot(user_id, &file_id, &final_path, size_bytes, 1);
+
         Ok(FileMetadataResponse::from(file))
+    }
+
+    /// Upload a new version of an existing file. Replaces the file's current content
+    /// and appends a new version record. Prunes oldest version when limit is exceeded.
+    pub fn upload_new_version(
+        &self,
+        user_id: &str,
+        file_id: &str,
+        temp_path: &Path,
+        size_bytes: i64,
+    ) -> Result<FileVersionResponse, ApiError> {
+        let file = self
+            .repo
+            .find_file(file_id, user_id)?
+            .ok_or_else(|| ApiError::not_found("File not found"))?;
+
+        // If the file has no version history yet, snapshot the current content as v1
+        let existing_count = self.repo.count_versions(file_id)?;
+        if existing_count == 0 {
+            let current_path = self.store.resolve(&file.storage_path);
+            self.create_version_snapshot(user_id, file_id, &current_path, file.size_bytes, 1);
+        }
+
+        // Overwrite the main file with new content
+        let main_path = self.store.file_path(user_id, file_id);
+        std::fs::rename(temp_path, &main_path).map_err(|e| {
+            log::error!("Failed to move new version to main path: {:?}", e);
+            ApiError::internal("Failed to save new version")
+        })?;
+
+        // Update file record (size and updated_at; storage_key stays the same fixed key)
+        let now = Utc::now().naive_utc();
+        self.repo.update_file_content(
+            file_id,
+            user_id,
+            UpdateFileContent {
+                size_bytes,
+                storage_path: self.store.file_key(user_id, file_id),
+                updated_at: now,
+            },
+        )?;
+
+        // Create snapshot of the new content as version N
+        let next_num = self.repo.max_version_number(file_id)? + 1;
+        let version = self
+            .create_version_snapshot_record(user_id, file_id, &main_path, size_bytes, next_num)?;
+
+        // Prune to MAX_VERSIONS
+        let total = self.repo.count_versions(file_id)?;
+        if total > MAX_VERSIONS {
+            if let Ok(Some(old_key)) = self.repo.delete_oldest_version(file_id) {
+                let _ = std::fs::remove_file(self.store.resolve(&old_key));
+            }
+        }
+
+        Ok(FileVersionResponse::from(version))
+    }
+
+    pub fn list_versions(
+        &self,
+        user_id: &str,
+        file_id: &str,
+    ) -> Result<ListVersionsResponse, ApiError> {
+        self.repo
+            .find_file(file_id, user_id)?
+            .ok_or_else(|| ApiError::not_found("File not found"))?;
+
+        let versions = self.repo.list_versions(file_id)?;
+        let total = versions.len();
+        Ok(ListVersionsResponse {
+            versions: versions.into_iter().map(FileVersionResponse::from).collect(),
+            total,
+        })
+    }
+
+    pub fn get_version(
+        &self,
+        user_id: &str,
+        file_id: &str,
+        version_id: &str,
+    ) -> Result<FileVersionResponse, ApiError> {
+        self.repo
+            .find_file(file_id, user_id)?
+            .ok_or_else(|| ApiError::not_found("File not found"))?;
+
+        let version = self
+            .repo
+            .find_version(version_id, file_id, user_id)?
+            .ok_or_else(|| ApiError::not_found("Version not found"))?;
+
+        Ok(FileVersionResponse::from(version))
+    }
+
+    pub fn restore_version(
+        &self,
+        user_id: &str,
+        file_id: &str,
+        version_id: &str,
+    ) -> Result<FileMetadataResponse, ApiError> {
+        let current = self
+            .repo
+            .find_file(file_id, user_id)?
+            .ok_or_else(|| ApiError::not_found("File not found"))?;
+
+        let version = self
+            .repo
+            .find_version(version_id, file_id, user_id)?
+            .ok_or_else(|| ApiError::not_found("Version not found"))?;
+
+        let main_path = self.store.file_path(user_id, file_id);
+
+        // Snapshot the current content before restoring (best-effort)
+        let next_num = self.repo.max_version_number(file_id)? + 1;
+        self.create_version_snapshot(
+            user_id,
+            file_id,
+            &self.store.resolve(&current.storage_path),
+            current.size_bytes,
+            next_num,
+        );
+
+        // Copy version snapshot content to the main file path
+        std::fs::copy(self.store.resolve(&version.storage_path), &main_path).map_err(|e| {
+            log::error!(
+                "Failed to restore version {} to main path: {:?}",
+                version_id,
+                e
+            );
+            ApiError::internal("Failed to restore version")
+        })?;
+
+        let now = Utc::now().naive_utc();
+        let updated = self.repo.update_file_content(
+            file_id,
+            user_id,
+            UpdateFileContent {
+                size_bytes: version.size_bytes,
+                storage_path: self.store.file_key(user_id, file_id),
+                updated_at: now,
+            },
+        )?;
+
+        Ok(FileMetadataResponse::from(updated))
+    }
+
+    pub fn update_version_label(
+        &self,
+        user_id: &str,
+        file_id: &str,
+        version_id: &str,
+        label: Option<String>,
+    ) -> Result<FileVersionResponse, ApiError> {
+        self.repo
+            .find_file(file_id, user_id)?
+            .ok_or_else(|| ApiError::not_found("File not found"))?;
+
+        self.repo
+            .find_version(version_id, file_id, user_id)?
+            .ok_or_else(|| ApiError::not_found("Version not found"))?;
+
+        let updated = self
+            .repo
+            .update_version_label(version_id, file_id, user_id, label)?;
+
+        Ok(FileVersionResponse::from(updated))
+    }
+
+    pub fn delete_version(
+        &self,
+        user_id: &str,
+        file_id: &str,
+        version_id: &str,
+    ) -> Result<(), ApiError> {
+        self.repo
+            .find_file(file_id, user_id)?
+            .ok_or_else(|| ApiError::not_found("File not found"))?;
+
+        let storage_key = self
+            .repo
+            .delete_version(version_id, file_id, user_id)?
+            .ok_or_else(|| ApiError::not_found("Version not found"))?;
+
+        let abs_path = self.store.resolve(&storage_key);
+        if let Err(e) = std::fs::remove_file(&abs_path) {
+            log::warn!("Failed to remove version file {:?}: {:?}", abs_path, e);
+        }
+
+        Ok(())
     }
 
     pub fn list_files(
@@ -117,7 +312,7 @@ impl StorageService {
         Ok(FileMetadataResponse::from(file))
     }
 
-    /// Returns the filesystem path for serving the file.
+    /// Returns the absolute filesystem path for serving the file.
     pub fn resolve_file_path(
         &self,
         user_id: &str,
@@ -128,7 +323,7 @@ impl StorageService {
             .find_file(file_id, user_id)?
             .ok_or_else(|| ApiError::not_found("File not found"))?;
         Ok((
-            std::path::PathBuf::from(&file.storage_path),
+            self.store.resolve(&file.storage_path),
             file.mime_type,
             file.name,
         ))
@@ -146,5 +341,65 @@ impl StorageService {
 
     pub fn store(&self) -> &LocalFileStore {
         &self.store
+    }
+
+    // ── Private helpers ────────────────────────────────────────────────────────
+
+    /// Copies `source` to a new version snapshot and inserts the DB record.
+    /// Best-effort: logs errors but does not propagate them.
+    fn create_version_snapshot(
+        &self,
+        user_id: &str,
+        file_id: &str,
+        source: &Path,
+        size_bytes: i64,
+        version_number: i32,
+    ) {
+        if let Err(e) = self.create_version_snapshot_record(
+            user_id,
+            file_id,
+            source,
+            size_bytes,
+            version_number,
+        ) {
+            log::error!(
+                "Failed to create version {} snapshot for file {}: {:?}",
+                version_number,
+                file_id,
+                e
+            );
+        }
+    }
+
+    fn create_version_snapshot_record(
+        &self,
+        user_id: &str,
+        file_id: &str,
+        source: &Path,
+        size_bytes: i64,
+        version_number: i32,
+    ) -> Result<crate::storage::model::FileVersionRecord, ApiError> {
+        if let Err(e) = self.store.ensure_versions_dir(user_id, file_id) {
+            return Err(ApiError::internal(e));
+        }
+
+        let version_id = Uuid::new_v4().to_string();
+        let version_abs_path = self.store.version_path(user_id, file_id, &version_id);
+        let version_key = self.store.version_key(user_id, file_id, &version_id);
+
+        std::fs::copy(source, &version_abs_path).map_err(|e| {
+            log::error!("Failed to copy file to version snapshot: {:?}", e);
+            ApiError::internal("Failed to create version snapshot")
+        })?;
+
+        self.repo.insert_version(NewFileVersionRecord {
+            id: &version_id,
+            file_id,
+            user_id,
+            version_number,
+            size_bytes,
+            storage_path: &version_key,
+            label: None,
+        })
     }
 }

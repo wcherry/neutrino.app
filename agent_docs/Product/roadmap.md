@@ -42,11 +42,11 @@ A phased roadmap for building a Google Drive-competitive cloud storage and colla
 - [x] Preview without requiring download
 
 ### 1.4 File Versioning
-- [ ] Automatic version snapshots on every upload/edit
-- [ ] View version history per file
-- [ ] Restore a previous version
-- [ ] Name/label specific versions
-- [ ] Retain up to 100 versions for non-native files
+- [x] Automatic version snapshots on every upload/edit
+- [x] View version history per file
+- [x] Restore a previous version
+- [x] Name/label specific versions
+- [x] Retain up to 100 versions for non-native files
 
 ### 1.5 Web Application (Core UI)
 - [x] UI Foundation: pnpm monorepo (apps/web, packages/ui)

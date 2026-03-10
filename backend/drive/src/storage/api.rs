@@ -1,14 +1,15 @@
 use crate::shared::{ApiError, AuthenticatedUser, ListQuery};
 use crate::storage::{
     dto::{
-        FileMetadataResponse, FileOrderField, ListFilesResponse, QuotaResponse,
-        ZipContentsResponse, ZipEntry,
+        FileMetadataResponse, FileOrderField, FileVersionResponse, ListFilesResponse,
+        ListVersionsResponse, QuotaResponse, UpdateVersionLabelRequest, ZipContentsResponse,
+        ZipEntry,
     },
     service::StorageService,
 };
 use actix_files::NamedFile;
 use actix_multipart::Multipart;
-use actix_web::{get, post, web, HttpRequest, HttpResponse};
+use actix_web::{delete, get, patch, post, web, HttpRequest, HttpResponse};
 use futures_util::StreamExt;
 use std::sync::Arc;
 use tokio::io::{AsyncWriteExt, BufWriter};
@@ -317,6 +318,220 @@ pub async fn get_quota(
     Ok(web::Json(quota))
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/drive/files/{id}/versions",
+    params(("id" = String, Path, description = "File ID")),
+    responses(
+        (status = 201, description = "New version uploaded", body = FileVersionResponse),
+        (status = 404, description = "File not found"),
+        (status = 413, description = "Storage quota exceeded"),
+    ),
+    security(("bearer_auth" = [])),
+    tag = "versioning"
+)]
+#[post("/files/{id}/versions")]
+pub async fn upload_version(
+    state: web::Data<StorageApiState>,
+    user: AuthenticatedUser,
+    path: web::Path<String>,
+    mut payload: Multipart,
+) -> Result<web::Json<FileVersionResponse>, ApiError> {
+    let file_id = path.into_inner();
+
+    while let Some(field) = payload.next().await {
+        let mut field = field.map_err(|e| {
+            log::error!("Multipart error: {:?}", e);
+            ApiError::bad_request("Invalid multipart data")
+        })?;
+
+        let temp_id = Uuid::new_v4().to_string();
+        state
+            .storage_service
+            .store()
+            .ensure_user_dir(&user.user_id)
+            .map_err(ApiError::internal)?;
+
+        let temp_path = state
+            .storage_service
+            .store()
+            .temp_path(&user.user_id, &temp_id);
+
+        let raw_file = tokio::fs::File::create(&temp_path).await.map_err(|e| {
+            log::error!("Failed to create temp file: {:?}", e);
+            ApiError::internal("Failed to initialize upload")
+        })?;
+        let mut file = BufWriter::with_capacity(1 << 20, raw_file);
+
+        let mut size: i64 = 0;
+        while let Some(chunk) = field.next().await {
+            let data = chunk.map_err(|e| {
+                log::error!("Chunk read error: {:?}", e);
+                ApiError::bad_request("Upload interrupted")
+            })?;
+            size += data.len() as i64;
+            file.write_all(&data).await.map_err(|e| {
+                log::error!("Write error: {:?}", e);
+                ApiError::internal("Failed to write upload data")
+            })?;
+        }
+
+        file.flush().await.map_err(|e| {
+            log::error!("Flush error: {:?}", e);
+            ApiError::internal("Failed to finalize upload")
+        })?;
+        drop(file);
+
+        let response = state
+            .storage_service
+            .upload_new_version(&user.user_id, &file_id, &temp_path, size)
+            .inspect_err(|_| {
+                let _ = std::fs::remove_file(&temp_path);
+            })?;
+
+        return Ok(web::Json(response));
+    }
+
+    Err(ApiError::bad_request("No file provided in multipart body"))
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/v1/drive/files/{id}/versions",
+    params(("id" = String, Path, description = "File ID")),
+    responses(
+        (status = 200, description = "Version history", body = ListVersionsResponse),
+        (status = 404, description = "File not found"),
+    ),
+    security(("bearer_auth" = [])),
+    tag = "versioning"
+)]
+#[get("/files/{id}/versions")]
+pub async fn list_versions(
+    state: web::Data<StorageApiState>,
+    user: AuthenticatedUser,
+    path: web::Path<String>,
+) -> Result<web::Json<ListVersionsResponse>, ApiError> {
+    let file_id = path.into_inner();
+    let response = state
+        .storage_service
+        .list_versions(&user.user_id, &file_id)?;
+    Ok(web::Json(response))
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/v1/drive/files/{id}/versions/{vid}",
+    params(
+        ("id" = String, Path, description = "File ID"),
+        ("vid" = String, Path, description = "Version ID"),
+    ),
+    responses(
+        (status = 200, description = "Version metadata", body = FileVersionResponse),
+        (status = 404, description = "File or version not found"),
+    ),
+    security(("bearer_auth" = [])),
+    tag = "versioning"
+)]
+#[get("/files/{id}/versions/{vid}")]
+pub async fn get_version(
+    state: web::Data<StorageApiState>,
+    user: AuthenticatedUser,
+    path: web::Path<(String, String)>,
+) -> Result<web::Json<FileVersionResponse>, ApiError> {
+    let (file_id, version_id) = path.into_inner();
+    let response = state
+        .storage_service
+        .get_version(&user.user_id, &file_id, &version_id)?;
+    Ok(web::Json(response))
+}
+
+#[utoipa::path(
+    patch,
+    path = "/api/v1/drive/files/{id}/versions/{vid}",
+    params(
+        ("id" = String, Path, description = "File ID"),
+        ("vid" = String, Path, description = "Version ID"),
+    ),
+    request_body = UpdateVersionLabelRequest,
+    responses(
+        (status = 200, description = "Version label updated", body = FileVersionResponse),
+        (status = 404, description = "File or version not found"),
+    ),
+    security(("bearer_auth" = [])),
+    tag = "versioning"
+)]
+#[patch("/files/{id}/versions/{vid}")]
+pub async fn update_version_label(
+    state: web::Data<StorageApiState>,
+    user: AuthenticatedUser,
+    path: web::Path<(String, String)>,
+    body: web::Json<UpdateVersionLabelRequest>,
+) -> Result<web::Json<FileVersionResponse>, ApiError> {
+    let (file_id, version_id) = path.into_inner();
+    let response = state.storage_service.update_version_label(
+        &user.user_id,
+        &file_id,
+        &version_id,
+        body.into_inner().label,
+    )?;
+    Ok(web::Json(response))
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/v1/drive/files/{id}/versions/{vid}/restore",
+    params(
+        ("id" = String, Path, description = "File ID"),
+        ("vid" = String, Path, description = "Version ID"),
+    ),
+    responses(
+        (status = 200, description = "File restored to version", body = FileMetadataResponse),
+        (status = 404, description = "File or version not found"),
+    ),
+    security(("bearer_auth" = [])),
+    tag = "versioning"
+)]
+#[post("/files/{id}/versions/{vid}/restore")]
+pub async fn restore_version(
+    state: web::Data<StorageApiState>,
+    user: AuthenticatedUser,
+    path: web::Path<(String, String)>,
+) -> Result<web::Json<FileMetadataResponse>, ApiError> {
+    let (file_id, version_id) = path.into_inner();
+    let response = state
+        .storage_service
+        .restore_version(&user.user_id, &file_id, &version_id)?;
+    Ok(web::Json(response))
+}
+
+#[utoipa::path(
+    delete,
+    path = "/api/v1/drive/files/{id}/versions/{vid}",
+    params(
+        ("id" = String, Path, description = "File ID"),
+        ("vid" = String, Path, description = "Version ID"),
+    ),
+    responses(
+        (status = 204, description = "Version deleted"),
+        (status = 404, description = "File or version not found"),
+    ),
+    security(("bearer_auth" = [])),
+    tag = "versioning"
+)]
+#[delete("/files/{id}/versions/{vid}")]
+pub async fn delete_version(
+    state: web::Data<StorageApiState>,
+    user: AuthenticatedUser,
+    path: web::Path<(String, String)>,
+) -> Result<HttpResponse, ApiError> {
+    let (file_id, version_id) = path.into_inner();
+    state
+        .storage_service
+        .delete_version(&user.user_id, &file_id, &version_id)?;
+    Ok(HttpResponse::NoContent().finish())
+}
+
 pub fn configure(conf: &mut web::ServiceConfig) {
     conf.service(
         web::scope("/drive")
@@ -326,13 +541,23 @@ pub fn configure(conf: &mut web::ServiceConfig) {
             .service(preview_file)
             .service(zip_contents)
             .service(download_file)
-            .service(get_quota),
+            .service(get_quota)
+            .service(upload_version)
+            .service(list_versions)
+            .service(get_version)
+            .service(update_version_label)
+            .service(restore_version)
+            .service(delete_version),
     );
 }
 
 #[derive(OpenApi)]
 #[openapi(
-    paths(upload_file, list_files, get_file_metadata, preview_file, zip_contents, download_file, get_quota),
+    paths(
+        upload_file, list_files, get_file_metadata, preview_file, zip_contents, download_file,
+        get_quota, upload_version, list_versions, get_version, update_version_label,
+        restore_version, delete_version,
+    ),
     components(schemas(
         FileMetadataResponse,
         FileOrderField,
@@ -340,8 +565,14 @@ pub fn configure(conf: &mut web::ServiceConfig) {
         QuotaResponse,
         ZipContentsResponse,
         ZipEntry,
+        FileVersionResponse,
+        ListVersionsResponse,
+        UpdateVersionLabelRequest,
     )),
-    tags((name = "storage", description = "File storage endpoints")),
+    tags(
+        (name = "storage", description = "File storage endpoints"),
+        (name = "versioning", description = "File version history endpoints"),
+    ),
     modifiers(&SecurityAddon)
 )]
 pub struct StorageApiDoc;

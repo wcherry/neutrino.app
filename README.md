@@ -106,6 +106,22 @@ pnpm dev
 
 The web app will be available at `http://localhost:3000`.
 
+### Nginx Proxy (Docker)
+
+For a single entry point with route-based proxying and large uploads, use the provided nginx service:
+
+```bash
+docker compose -f docker-compose.nginx.yml up -d
+```
+
+Routes:
+- `http://localhost:8880/api/v1/auth` → `http://localhost:8881`
+- `http://localhost:8880/api/v1/drive` → `http://localhost:8882`
+- everything else → `http://localhost:3000`
+
+Upload limit is set to **10 GB** in `nginx/neutrino-proxy.conf`.
+If you run the upstream services in Docker instead of on the host, update the upstreams in that config.
+
 ### Environment Variables
 
 | Variable | Default | Description |

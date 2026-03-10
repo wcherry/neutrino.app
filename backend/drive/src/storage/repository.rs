@@ -1,7 +1,10 @@
 use crate::shared::{ApiError, ListQuery, OrderDirection};
-use crate::storage::model::{FileRecord, NewFileRecord, NewUserQuota, UserQuota};
+use crate::storage::model::{
+    FileRecord, FileVersionRecord, NewFileRecord, NewFileVersionRecord, NewUserQuota,
+    UpdateFileContent, UserQuota,
+};
 use crate::storage::dto::FileOrderField;
-use crate::schema::{files, user_quotas};
+use crate::schema::{file_versions, files, user_quotas};
 use chrono::NaiveDateTime;
 use diesel::prelude::*;
 use diesel::r2d2::{ConnectionManager, Pool};
@@ -156,6 +159,220 @@ impl StorageRepository {
             })?;
 
         Ok(())
+    }
+
+    pub fn update_file_content(
+        &self,
+        file_id: &str,
+        user_id: &str,
+        changeset: UpdateFileContent,
+    ) -> Result<FileRecord, ApiError> {
+        let mut conn = self.get_conn()?;
+
+        diesel::update(
+            files::table
+                .filter(files::id.eq(file_id))
+                .filter(files::user_id.eq(user_id)),
+        )
+        .set(&changeset)
+        .execute(&mut conn)
+        .map_err(|e| {
+            log::error!("DB update file content error: {:?}", e);
+            ApiError::internal("Database error")
+        })?;
+
+        files::table
+            .filter(files::id.eq(file_id))
+            .select(FileRecord::as_select())
+            .first(&mut conn)
+            .map_err(|e| {
+                log::error!("DB fetch updated file error: {:?}", e);
+                ApiError::internal("Database error")
+            })
+    }
+
+    // ── Version methods ────────────────────────────────────────────────────────
+
+    pub fn insert_version(
+        &self,
+        new_version: NewFileVersionRecord,
+    ) -> Result<FileVersionRecord, ApiError> {
+        let mut conn = self.get_conn()?;
+
+        diesel::insert_into(file_versions::table)
+            .values(&new_version)
+            .execute(&mut conn)
+            .map_err(|e| {
+                log::error!("DB insert version error: {:?}", e);
+                ApiError::internal("Database error")
+            })?;
+
+        file_versions::table
+            .filter(file_versions::id.eq(new_version.id))
+            .select(FileVersionRecord::as_select())
+            .first(&mut conn)
+            .map_err(|e| {
+                log::error!("DB query after version insert error: {:?}", e);
+                ApiError::internal("Database error")
+            })
+    }
+
+    pub fn list_versions(&self, file_id: &str) -> Result<Vec<FileVersionRecord>, ApiError> {
+        let mut conn = self.get_conn()?;
+
+        file_versions::table
+            .filter(file_versions::file_id.eq(file_id))
+            .select(FileVersionRecord::as_select())
+            .order(file_versions::version_number.desc())
+            .load(&mut conn)
+            .map_err(|e| {
+                log::error!("DB list versions error: {:?}", e);
+                ApiError::internal("Database error")
+            })
+    }
+
+    pub fn find_version(
+        &self,
+        version_id: &str,
+        file_id: &str,
+        user_id: &str,
+    ) -> Result<Option<FileVersionRecord>, ApiError> {
+        let mut conn = self.get_conn()?;
+
+        file_versions::table
+            .filter(file_versions::id.eq(version_id))
+            .filter(file_versions::file_id.eq(file_id))
+            .filter(file_versions::user_id.eq(user_id))
+            .select(FileVersionRecord::as_select())
+            .first(&mut conn)
+            .optional()
+            .map_err(|e| {
+                log::error!("DB find version error: {:?}", e);
+                ApiError::internal("Database error")
+            })
+    }
+
+    pub fn count_versions(&self, file_id: &str) -> Result<i64, ApiError> {
+        let mut conn = self.get_conn()?;
+
+        file_versions::table
+            .filter(file_versions::file_id.eq(file_id))
+            .count()
+            .get_result(&mut conn)
+            .map_err(|e| {
+                log::error!("DB count versions error: {:?}", e);
+                ApiError::internal("Database error")
+            })
+    }
+
+    pub fn max_version_number(&self, file_id: &str) -> Result<i32, ApiError> {
+        use diesel::dsl::max;
+        let mut conn = self.get_conn()?;
+
+        file_versions::table
+            .filter(file_versions::file_id.eq(file_id))
+            .select(max(file_versions::version_number))
+            .first::<Option<i32>>(&mut conn)
+            .map(|v| v.unwrap_or(0))
+            .map_err(|e| {
+                log::error!("DB max version number error: {:?}", e);
+                ApiError::internal("Database error")
+            })
+    }
+
+    pub fn update_version_label(
+        &self,
+        version_id: &str,
+        file_id: &str,
+        user_id: &str,
+        label: Option<String>,
+    ) -> Result<FileVersionRecord, ApiError> {
+        let mut conn = self.get_conn()?;
+
+        diesel::update(
+            file_versions::table
+                .filter(file_versions::id.eq(version_id))
+                .filter(file_versions::file_id.eq(file_id))
+                .filter(file_versions::user_id.eq(user_id)),
+        )
+        .set(file_versions::label.eq(&label))
+        .execute(&mut conn)
+        .map_err(|e| {
+            log::error!("DB update version label error: {:?}", e);
+            ApiError::internal("Database error")
+        })?;
+
+        file_versions::table
+            .filter(file_versions::id.eq(version_id))
+            .select(FileVersionRecord::as_select())
+            .first(&mut conn)
+            .map_err(|e| {
+                log::error!("DB fetch updated version error: {:?}", e);
+                ApiError::internal("Database error")
+            })
+    }
+
+    pub fn delete_version(
+        &self,
+        version_id: &str,
+        file_id: &str,
+        user_id: &str,
+    ) -> Result<Option<String>, ApiError> {
+        let mut conn = self.get_conn()?;
+
+        let version = file_versions::table
+            .filter(file_versions::id.eq(version_id))
+            .filter(file_versions::file_id.eq(file_id))
+            .filter(file_versions::user_id.eq(user_id))
+            .select(FileVersionRecord::as_select())
+            .first(&mut conn)
+            .optional()
+            .map_err(|e| {
+                log::error!("DB find version for delete error: {:?}", e);
+                ApiError::internal("Database error")
+            })?;
+
+        let Some(version) = version else {
+            return Ok(None);
+        };
+
+        diesel::delete(file_versions::table.filter(file_versions::id.eq(version_id)))
+            .execute(&mut conn)
+            .map_err(|e| {
+                log::error!("DB delete version error: {:?}", e);
+                ApiError::internal("Database error")
+            })?;
+
+        Ok(Some(version.storage_path))
+    }
+
+    /// Deletes the oldest version for a file and returns its storage_path for disk cleanup.
+    pub fn delete_oldest_version(&self, file_id: &str) -> Result<Option<String>, ApiError> {
+        let mut conn = self.get_conn()?;
+
+        let oldest = file_versions::table
+            .filter(file_versions::file_id.eq(file_id))
+            .select(FileVersionRecord::as_select())
+            .order(file_versions::version_number.asc())
+            .first(&mut conn)
+            .optional()
+            .map_err(|e| {
+                log::error!("DB find oldest version error: {:?}", e);
+                ApiError::internal("Database error")
+            })?;
+
+        let Some(version) = oldest else {
+            return Ok(None);
+        };
+
+        diesel::delete(file_versions::table.filter(file_versions::id.eq(&version.id)))
+            .execute(&mut conn)
+            .map_err(|e| {
+                log::error!("DB delete oldest version error: {:?}", e);
+                ApiError::internal("Database error")
+            })?;
+
+        Ok(Some(version.storage_path))
     }
 
     fn get_conn(

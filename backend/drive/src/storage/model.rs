@@ -49,3 +49,40 @@ pub struct UserQuota {
 pub struct NewUserQuota<'a> {
     pub user_id: &'a str,
 }
+
+// ── FileVersion ───────────────────────────────────────────────────────────────
+
+#[allow(dead_code)]
+#[derive(Debug, Clone, Queryable, Selectable)]
+#[diesel(table_name = crate::schema::file_versions)]
+#[diesel(check_for_backend(diesel::sqlite::Sqlite))]
+pub struct FileVersionRecord {
+    pub id: String,
+    pub file_id: String,
+    pub user_id: String,
+    pub version_number: i32,
+    pub size_bytes: i64,
+    pub storage_path: String,
+    pub label: Option<String>,
+    pub created_at: NaiveDateTime,
+}
+
+#[derive(Debug, Insertable)]
+#[diesel(table_name = crate::schema::file_versions)]
+pub struct NewFileVersionRecord<'a> {
+    pub id: &'a str,
+    pub file_id: &'a str,
+    pub user_id: &'a str,
+    pub version_number: i32,
+    pub size_bytes: i64,
+    pub storage_path: &'a str,
+    pub label: Option<&'a str>,
+}
+
+#[derive(Debug, AsChangeset)]
+#[diesel(table_name = crate::schema::files)]
+pub struct UpdateFileContent {
+    pub size_bytes: i64,
+    pub storage_path: String,
+    pub updated_at: NaiveDateTime,
+}

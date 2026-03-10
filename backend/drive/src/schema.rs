@@ -55,12 +55,27 @@ diesel::table! {
     }
 }
 
+diesel::table! {
+    file_versions (id) {
+        id -> Text,
+        file_id -> Text,
+        user_id -> Text,
+        version_number -> Integer,
+        size_bytes -> BigInt,
+        storage_path -> Text,
+        label -> Nullable<Text>,
+        created_at -> Timestamp,
+    }
+}
+
 diesel::joinable!(files -> folders (folder_id));
 diesel::joinable!(shortcuts -> files (target_file_id));
+diesel::joinable!(file_versions -> files (file_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
     files,
     user_quotas,
     folders,
     shortcuts,
+    file_versions,
 );

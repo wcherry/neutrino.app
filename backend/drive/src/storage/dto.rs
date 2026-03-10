@@ -1,4 +1,4 @@
-use crate::storage::model::FileRecord;
+use crate::storage::model::{FileRecord, FileVersionRecord};
 use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -62,6 +62,43 @@ pub struct ZipEntry {
 #[serde(rename_all = "camelCase")]
 pub struct ZipContentsResponse {
     pub entries: Vec<ZipEntry>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct FileVersionResponse {
+    pub id: String,
+    pub file_id: String,
+    pub version_number: i32,
+    pub size_bytes: i64,
+    pub label: Option<String>,
+    pub created_at: NaiveDateTime,
+}
+
+impl From<FileVersionRecord> for FileVersionResponse {
+    fn from(v: FileVersionRecord) -> Self {
+        FileVersionResponse {
+            id: v.id,
+            file_id: v.file_id,
+            version_number: v.version_number,
+            size_bytes: v.size_bytes,
+            label: v.label,
+            created_at: v.created_at,
+        }
+    }
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ListVersionsResponse {
+    pub versions: Vec<FileVersionResponse>,
+    pub total: usize,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateVersionLabelRequest {
+    pub label: Option<String>,
 }
 
 #[derive(Debug, Serialize, ToSchema)]

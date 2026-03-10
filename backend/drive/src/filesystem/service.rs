@@ -221,8 +221,9 @@ impl FilesystemService {
             .unix_permissions(0o644);
 
         for file in &files {
-            let data = std::fs::read(&file.storage_path).map_err(|e| {
-                log::error!("Failed to read file {:?} for zip: {:?}", file.storage_path, e);
+            let abs_path = self.store.resolve(&file.storage_path);
+            let data = std::fs::read(&abs_path).map_err(|e| {
+                log::error!("Failed to read file {:?} for zip: {:?}", abs_path, e);
                 ApiError::internal("Failed to read file for download")
             })?;
 
@@ -237,7 +238,6 @@ impl FilesystemService {
             })?;
         }
 
-        let _ = self.store; // ensure store is accessible
         let cursor = zip.finish().map_err(|e| {
             log::error!("Zip finish error: {:?}", e);
             ApiError::internal("Failed to finalize zip archive")
@@ -278,12 +278,9 @@ impl FilesystemService {
         file_id: &str,
     ) -> Result<(), ApiError> {
         if let Some(file) = self.repo.permanently_delete_file(file_id, user_id)? {
-            if let Err(e) = std::fs::remove_file(&file.storage_path) {
-                log::warn!(
-                    "Failed to remove file from disk {:?}: {:?}",
-                    file.storage_path,
-                    e
-                );
+            let abs_path = self.store.resolve(&file.storage_path);
+            if let Err(e) = std::fs::remove_file(&abs_path) {
+                log::warn!("Failed to remove file from disk {:?}: {:?}", abs_path, e);
             }
         } else {
             return Err(ApiError::not_found("File not found in trash"));
@@ -308,10 +305,11 @@ impl FilesystemService {
         let count = deleted_files.len();
 
         for file in deleted_files {
-            if let Err(e) = std::fs::remove_file(&file.storage_path) {
+            let abs_path = self.store.resolve(&file.storage_path);
+            if let Err(e) = std::fs::remove_file(&abs_path) {
                 log::warn!(
                     "Failed to remove trashed file from disk {:?}: {:?}",
-                    file.storage_path,
+                    abs_path,
                     e
                 );
             }
@@ -327,10 +325,11 @@ impl FilesystemService {
         let count = deleted_files.len();
 
         for file in deleted_files {
-            if let Err(e) = std::fs::remove_file(&file.storage_path) {
+            let abs_path = self.store.resolve(&file.storage_path);
+            if let Err(e) = std::fs::remove_file(&abs_path) {
                 log::warn!(
                     "Failed to remove expired trashed file from disk {:?}: {:?}",
-                    file.storage_path,
+                    abs_path,
                     e
                 );
             }
