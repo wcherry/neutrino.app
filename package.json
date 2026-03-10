@@ -1,0 +1,13 @@
+{
+  "name": "neutrino",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm --filter @neutrino/web dev",
+    "build": "pnpm --filter @neutrino/ui build && pnpm --filter @neutrino/web build",
+    "lint": "pnpm -r lint"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0"
+  }
+}

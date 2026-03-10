@@ -1,6 +1,6 @@
 CREATE TABLE files (
     id TEXT PRIMARY KEY NOT NULL,
-    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL,
     name TEXT NOT NULL,
     size_bytes INTEGER NOT NULL DEFAULT 0,
     mime_type TEXT NOT NULL DEFAULT 'application/octet-stream',

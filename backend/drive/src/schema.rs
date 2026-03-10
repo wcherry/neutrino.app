@@ -2,26 +2,6 @@
 // Manually maintained to match migrations.
 
 diesel::table! {
-    users (id) {
-        id -> Text,
-        email -> Text,
-        name -> Text,
-        password_hash -> Text,
-        created_at -> Timestamp,
-    }
-}
-
-diesel::table! {
-    refresh_tokens (id) {
-        id -> Text,
-        user_id -> Text,
-        token_hash -> Text,
-        expires_at -> Timestamp,
-        created_at -> Timestamp,
-    }
-}
-
-diesel::table! {
     folders (id) {
         id -> Text,
         user_id -> Text,
@@ -75,17 +55,10 @@ diesel::table! {
     }
 }
 
-diesel::joinable!(refresh_tokens -> users (user_id));
-diesel::joinable!(files -> users (user_id));
 diesel::joinable!(files -> folders (folder_id));
-diesel::joinable!(user_quotas -> users (user_id));
-diesel::joinable!(folders -> users (user_id));
-diesel::joinable!(shortcuts -> users (user_id));
 diesel::joinable!(shortcuts -> files (target_file_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
-    users,
-    refresh_tokens,
     files,
     user_quotas,
     folders,

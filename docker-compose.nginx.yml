@@ -1,0 +1,11 @@
+version: "3.9"
+
+services:
+  nginx-proxy:
+    image: nginx:1.27-alpine
+    container_name: neutrino-nginx-proxy
+    ports:
+      - "8880:8880"
+    volumes:
+      - ./nginx/neutrino-proxy.conf:/etc/nginx/conf.d/default.conf:ro
+    restart: unless-stopped

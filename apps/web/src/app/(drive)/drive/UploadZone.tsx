@@ -1,0 +1,214 @@
+'use client';
+
+import React, { useCallback, useRef, useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { Upload, X, CheckCircle, AlertCircle, File } from 'lucide-react';
+import { storageApi } from '@/lib/api';
+import styles from './UploadZone.module.css';
+
+interface UploadEntry {
+  id: string;
+  file: File;
+  progress: number;
+  status: 'pending' | 'uploading' | 'done' | 'error';
+  error?: string;
+}
+
+interface UploadZoneProps {
+  onClose: () => void;
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}
+
+export function UploadZone({ onClose }: UploadZoneProps) {
+  const queryClient = useQueryClient();
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [dragging, setDragging] = useState(false);
+  const [entries, setEntries] = useState<UploadEntry[]>([]);
+
+  const updateEntry = useCallback((id: string, patch: Partial<UploadEntry>) => {
+    setEntries((prev) => prev.map((e) => (e.id === id ? { ...e, ...patch } : e)));
+  }, []);
+
+  const { mutate: uploadFile } = useMutation({
+    mutationFn: ({ entry }: { entry: UploadEntry }) =>
+      storageApi.uploadFile(entry.file, (progress) => {
+        updateEntry(entry.id, { progress, status: 'uploading' });
+      }),
+    onSuccess: (_data, { entry }) => {
+      updateEntry(entry.id, { status: 'done', progress: 100 });
+      queryClient.invalidateQueries({ queryKey: ['files'] });
+    },
+    onError: (err, { entry }) => {
+      updateEntry(entry.id, {
+        status: 'error',
+        error: err instanceof Error ? err.message : 'Upload failed',
+      });
+    },
+  });
+
+  const enqueueFiles = useCallback(
+    (files: FileList | File[]) => {
+      const newEntries: UploadEntry[] = Array.from(files).map((file) => ({
+        id: `${file.name}-${file.size}-${Date.now()}-${Math.random()}`,
+        file,
+        progress: 0,
+        status: 'pending',
+      }));
+      setEntries((prev) => [...prev, ...newEntries]);
+      newEntries.forEach((entry) => uploadFile({ entry }));
+    },
+    [uploadFile]
+  );
+
+  const onDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragging(true);
+  };
+
+  const onDragLeave = (e: React.DragEvent) => {
+    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+      setDragging(false);
+    }
+  };
+
+  const onDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragging(false);
+    if (e.dataTransfer.files.length > 0) {
+      enqueueFiles(e.dataTransfer.files);
+    }
+  };
+
+  const onInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      enqueueFiles(e.target.files);
+      e.target.value = '';
+    }
+  };
+
+  const removeEntry = (id: string) => {
+    setEntries((prev) => prev.filter((e) => e.id !== id));
+  };
+
+  const allDone = entries.length > 0 && entries.every((e) => e.status === 'done' || e.status === 'error');
+  const hasActive = entries.some((e) => e.status === 'uploading' || e.status === 'pending');
+
+  return (
+    <div className={styles.overlay} onClick={onClose} role="dialog" aria-modal="true" aria-label="Upload files">
+      <div className={styles.panel} onClick={(e) => e.stopPropagation()}>
+        <div className={styles.header}>
+          <span className={styles.title}>Upload files</span>
+          <button
+            type="button"
+            className={styles.closeBtn}
+            onClick={onClose}
+            aria-label="Close"
+            disabled={hasActive}
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* Drop zone */}
+        <div
+          className={[styles.dropzone, dragging ? styles.dragging : ''].filter(Boolean).join(' ')}
+          onDragOver={onDragOver}
+          onDragLeave={onDragLeave}
+          onDrop={onDrop}
+          onClick={() => inputRef.current?.click()}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => e.key === 'Enter' && inputRef.current?.click()}
+          aria-label="Drop files here or click to browse"
+        >
+          <Upload size={32} className={styles.dropIcon} />
+          <p className={styles.dropText}>
+            {dragging ? 'Drop to upload' : 'Drag & drop files here'}
+          </p>
+          <p className={styles.dropSub}>or click to browse · up to 10 GB per file</p>
+          <input
+            ref={inputRef}
+            type="file"
+            multiple
+            className={styles.hiddenInput}
+            onChange={onInputChange}
+            tabIndex={-1}
+            aria-hidden="true"
+          />
+        </div>
+
+        {/* Upload list */}
+        {entries.length > 0 && (
+          <ul className={styles.list} aria-label="Upload queue">
+            {entries.map((entry) => (
+              <li key={entry.id} className={styles.item}>
+                <div className={styles.itemIcon}>
+                  {entry.status === 'done' ? (
+                    <CheckCircle size={18} className={styles.iconDone} />
+                  ) : entry.status === 'error' ? (
+                    <AlertCircle size={18} className={styles.iconError} />
+                  ) : (
+                    <File size={18} className={styles.iconFile} />
+                  )}
+                </div>
+                <div className={styles.itemBody}>
+                  <div className={styles.itemRow}>
+                    <span className={styles.itemName}>{entry.file.name}</span>
+                    <span className={styles.itemSize}>{formatFileSize(entry.file.size)}</span>
+                    {(entry.status === 'done' || entry.status === 'error') && (
+                      <button
+                        type="button"
+                        className={styles.removeBtn}
+                        onClick={() => removeEntry(entry.id)}
+                        aria-label={`Remove ${entry.file.name}`}
+                      >
+                        <X size={12} />
+                      </button>
+                    )}
+                  </div>
+                  {entry.status === 'error' ? (
+                    <p className={styles.itemError}>{entry.error}</p>
+                  ) : (
+                    <div className={styles.progressTrack} role="progressbar" aria-valuenow={entry.progress} aria-valuemin={0} aria-valuemax={100}>
+                      <div
+                        className={[
+                          styles.progressBar,
+                          entry.status === 'done' ? styles.progressDone : '',
+                        ].filter(Boolean).join(' ')}
+                        style={{ width: `${entry.progress}%` }}
+                      />
+                    </div>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {/* Footer */}
+        {entries.length > 0 && (
+          <div className={styles.footer}>
+            <span className={styles.footerStatus}>
+              {hasActive
+                ? `Uploading ${entries.filter((e) => e.status === 'uploading' || e.status === 'pending').length} file(s)…`
+                : allDone
+                ? `${entries.filter((e) => e.status === 'done').length} uploaded`
+                : ''}
+            </span>
+            {allDone && (
+              <button type="button" className={styles.doneBtn} onClick={onClose}>
+                Done
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

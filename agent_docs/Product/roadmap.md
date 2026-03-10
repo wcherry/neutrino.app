@@ -34,12 +34,12 @@ A phased roadmap for building a Google Drive-competitive cloud storage and colla
 - [x] Trash with 30-day retention and restore
 
 ### 1.3 File Preview
-- [ ] In-browser viewer for PDF
-- [ ] In-browser viewer for images (JPEG, PNG, GIF, WebP)
-- [ ] In-browser viewer for video (MP4, MOV)
-- [ ] In-browser viewer for plain text and code files (syntax highlighting)
-- [ ] In-browser viewer for ZIP archive (show contents)
-- [ ] Preview without requiring download
+- [x] In-browser viewer for PDF
+- [x] In-browser viewer for images (JPEG, PNG, GIF, WebP)
+- [x] In-browser viewer for video (MP4, MOV)
+- [x] In-browser viewer for plain text and code files (syntax highlighting)
+- [x] In-browser viewer for ZIP archive (show contents)
+- [x] Preview without requiring download
 
 ### 1.4 File Versioning
 - [ ] Automatic version snapshots on every upload/edit
@@ -49,14 +49,20 @@ A phased roadmap for building a Google Drive-competitive cloud storage and colla
 - [ ] Retain up to 100 versions for non-native files
 
 ### 1.5 Web Application (Core UI)
-- [ ] Authentication (sign up, sign in, sign out)
-- [ ] Drive home page: list/grid view of files and folders
+- [x] UI Foundation: pnpm monorepo (apps/web, packages/ui)
+- [x] Design tokens: colors, spacing, typography, shadows, motion (CSS custom properties)
+- [x] Component library: 30+ components with CSS Modules and full TypeScript types
+- [x] AppShell: CSS Grid layout (240px sidebar + 64px topbar + main)
+- [x] Drive home page: list/grid view of files with quick access section
+- [x] Typed API client for all backend endpoints (auth, storage, filesystem)
+- [x] TanStack Query + Zustand + React Hook Form + Zod integration
+- [x] WCAG AA accessibility (focus traps, ARIA, live regions, keyboard nav)
+- [ ] Authentication pages (sign up, sign in, sign out)
 - [ ] Sort by name, date modified, owner, size
 - [ ] Filter by file type and starred/shared
 - [ ] File info panel (metadata, activity, version count)
 - [ ] Upload via browser file picker and drag-and-drop
 - [ ] Context menu: rename, move, download, delete, star, copy link
-- [ ] Storage quota indicator (used vs. available)
 
 ---
 
