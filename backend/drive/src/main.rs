@@ -13,6 +13,7 @@ mod filesystem;
 mod permissions;
 mod schema;
 mod shared;
+mod sharing;
 mod storage;
 
 use crate::config::Config;
@@ -25,6 +26,11 @@ use crate::permissions::{
     api::{PermissionsApiDoc, PermissionsApiState},
     repository::PermissionsRepository,
     service::PermissionsService,
+};
+use crate::sharing::{
+    api::{SharingApiDoc, SharingApiState},
+    repository::SharingRepository,
+    service::SharingService,
 };
 use crate::shared::TokenService;
 use crate::storage::{
@@ -141,9 +147,20 @@ async fn main() -> std::io::Result<()> {
 
     // Filesystem setup
     let fs_repo = Arc::new(FilesystemRepository::new(pool.clone()));
-    let fs_service = Arc::new(FilesystemService::new(fs_repo, file_store, permissions_service));
+    let fs_service = Arc::new(FilesystemService::new(
+        fs_repo,
+        file_store,
+        permissions_service.clone(),
+    ));
     let fs_state = web::Data::new(FilesystemApiState {
         filesystem_service: fs_service,
+    });
+
+    // Sharing setup
+    let sharing_repo = Arc::new(SharingRepository::new(pool.clone()));
+    let sharing_service = Arc::new(SharingService::new(sharing_repo, permissions_service));
+    let sharing_state = web::Data::new(SharingApiState {
+        sharing_service,
     });
 
     let token_service_data = web::Data::new(token_service.clone());
@@ -160,6 +177,7 @@ async fn main() -> std::io::Result<()> {
         let mut openapi = StorageApiDoc::openapi();
         openapi.merge(FilesystemApiDoc::openapi());
         openapi.merge(PermissionsApiDoc::openapi());
+        openapi.merge(SharingApiDoc::openapi());
         let config = SwaggerConfig::new(vec![
             "http://localhost:8881/api-docs/openapi.json",
             "http://localhost:8882/api-docs/openapi.json"
@@ -171,6 +189,7 @@ async fn main() -> std::io::Result<()> {
             .app_data(storage_state.clone())
             .app_data(fs_state.clone())
             .app_data(permissions_state.clone())
+            .app_data(sharing_state.clone())
             .app_data(token_service_data.clone())
             .wrap(Logger::default())
             .wrap(Cors::permissive())
@@ -179,7 +198,12 @@ async fn main() -> std::io::Result<()> {
                 web::scope("/api/v1/drive")
                     .configure(storage::api::configure)
                     .configure(filesystem::api::configure)
-                    .configure(permissions::api::configure),
+                    .configure(permissions::api::configure)
+                    .configure(sharing::api::configure_drive),
+            )
+            .service(
+                web::scope("/api/v1")
+                    .configure(sharing::api::configure_public),
             )
             .service(
                 SwaggerUi::new("/swagger-ui/{_:.*}")

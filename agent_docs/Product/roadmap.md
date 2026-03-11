@@ -78,10 +78,10 @@ A phased roadmap for building a Google Drive-competitive cloud storage and colla
 - [x] Transfer ownership between users
 
 ### 2.2 Link Sharing
-- [ ] Generate shareable links per file/folder
-- [ ] Set link visibility: public, anyone with link, specific people
-- [ ] Set link expiration dates
-- [ ] Disable link sharing (make access-list-only)
+- [x] Generate shareable links per file/folder
+- [x] Set link visibility: public, anyone with link, specific people
+- [x] Set link expiration dates
+- [x] Disable link sharing (make access-list-only)
 
 ### 2.3 Information Rights Management (IRM)
 - [ ] Restrict download for Viewer and Commenter roles

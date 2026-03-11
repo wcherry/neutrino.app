@@ -69,6 +69,22 @@ diesel::table! {
 }
 
 diesel::table! {
+    share_links (id) {
+        id -> Text,
+        resource_type -> Text,
+        resource_id -> Text,
+        token -> Text,
+        visibility -> Text,
+        role -> Text,
+        expires_at -> Nullable<Timestamp>,
+        is_active -> Bool,
+        created_by -> Text,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
     permissions (id) {
         id -> Text,
         resource_type -> Text,
@@ -91,4 +107,5 @@ diesel::allow_tables_to_appear_in_same_query!(
     shortcuts,
     file_versions,
     permissions,
+    share_links,
 );
