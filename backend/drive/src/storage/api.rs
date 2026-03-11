@@ -1,9 +1,11 @@
-use crate::shared::{ApiError, AuthenticatedUser, ListQuery};
+use crate::shared::{
+    apply_list_query, ApiError, AuthenticatedUser, ListQuery, ListQueryParams, OrderDirection,
+};
 use crate::storage::{
     dto::{
         FileMetadataResponse, FileOrderField, FileVersionResponse, ListFilesResponse,
-        ListVersionsResponse, QuotaResponse, UpdateVersionLabelRequest, ZipContentsResponse,
-        ZipEntry,
+        ListVersionsResponse, QuotaResponse, UpdateVersionLabelRequest, VersionOrderField,
+        ZipContentsResponse, ZipEntry, ZipEntryOrderField,
     },
     service::StorageService,
 };
@@ -38,11 +40,41 @@ pub async fn upload_file(
     user: AuthenticatedUser,
     mut payload: Multipart,
 ) -> Result<web::Json<FileMetadataResponse>, ApiError> {
+    let mut folder_id: Option<String> = None;
+
     while let Some(field) = payload.next().await {
         let mut field = field.map_err(|e| {
             log::error!("Multipart error: {:?}", e);
             ApiError::bad_request("Invalid multipart data")
         })?;
+
+        let field_name = field
+            .content_disposition()
+            .and_then(|cd| cd.get_name().map(|s| s.to_string()))
+            .unwrap_or_default();
+
+        // Non-file text field — read scalar value
+        if field
+            .content_disposition()
+            .and_then(|cd| cd.get_filename())
+            .is_none()
+        {
+            if field_name == "folder_id" {
+                let mut buf = Vec::new();
+                while let Some(chunk) = field.next().await {
+                    let data = chunk.map_err(|e| {
+                        log::error!("Chunk read error: {:?}", e);
+                        ApiError::bad_request("Upload interrupted")
+                    })?;
+                    buf.extend_from_slice(&data);
+                }
+                let value = String::from_utf8_lossy(&buf).trim().to_string();
+                if !value.is_empty() {
+                    folder_id = Some(value);
+                }
+            }
+            continue;
+        }
 
         let file_name = field
             .content_disposition()
@@ -101,7 +133,14 @@ pub async fn upload_file(
 
         let response = state
             .storage_service
-            .finalize_upload(&user.user_id, &temp_path, &file_name, &mime_type, size)
+            .finalize_upload(
+                &user.user_id,
+                &temp_path,
+                &file_name,
+                &mime_type,
+                size,
+                folder_id.as_deref(),
+            )
             .inspect_err(|_| {
                 let _ = std::fs::remove_file(&temp_path);
             })?;
@@ -254,7 +293,13 @@ pub async fn preview_file(
 #[utoipa::path(
     get,
     path = "/api/v1/drive/files/{id}/zip-contents",
-    params(("id" = String, Path, description = "File ID (must be a ZIP archive)")),
+    params(
+        ("id" = String, Path, description = "File ID (must be a ZIP archive)"),
+        ("limit" = Option<i64>, Query, description = "Max results per page"),
+        ("offset" = Option<i64>, Query, description = "Pagination offset"),
+        ("orderBy" = Option<ZipEntryOrderField>, Query, description = "Sort field"),
+        ("direction" = Option<String>, Query, description = "asc or desc"),
+    ),
     responses(
         (status = 200, description = "ZIP archive entry listing", body = ZipContentsResponse),
         (status = 400, description = "File is not a valid ZIP archive"),
@@ -268,6 +313,7 @@ pub async fn zip_contents(
     state: web::Data<StorageApiState>,
     user: AuthenticatedUser,
     path: web::Path<String>,
+    query: web::Query<ListQueryParams<ZipEntryOrderField>>,
 ) -> Result<web::Json<ZipContentsResponse>, ApiError> {
     let file_id = path.into_inner();
     let (file_path, _, _) = state
@@ -296,6 +342,19 @@ pub async fn zip_contents(
     })
     .await
     .map_err(|_| ApiError::internal("Failed to read ZIP archive"))??;
+
+    let entries = apply_list_query(
+        entries,
+        &query,
+        ZipEntryOrderField::Name,
+        OrderDirection::Asc,
+        |a, b, order_by| match order_by {
+            ZipEntryOrderField::Name => a.name.cmp(&b.name),
+            ZipEntryOrderField::Size => a.size.cmp(&b.size),
+            ZipEntryOrderField::CompressedSize => a.compressed_size.cmp(&b.compressed_size),
+            ZipEntryOrderField::IsDir => a.is_dir.cmp(&b.is_dir),
+        },
+    );
 
     Ok(web::Json(ZipContentsResponse { entries }))
 }
@@ -398,7 +457,13 @@ pub async fn upload_version(
 #[utoipa::path(
     get,
     path = "/api/v1/drive/files/{id}/versions",
-    params(("id" = String, Path, description = "File ID")),
+    params(
+        ("id" = String, Path, description = "File ID"),
+        ("limit" = Option<i64>, Query, description = "Max results per page"),
+        ("offset" = Option<i64>, Query, description = "Pagination offset"),
+        ("orderBy" = Option<VersionOrderField>, Query, description = "Sort field"),
+        ("direction" = Option<String>, Query, description = "asc or desc"),
+    ),
     responses(
         (status = 200, description = "Version history", body = ListVersionsResponse),
         (status = 404, description = "File not found"),
@@ -411,11 +476,12 @@ pub async fn list_versions(
     state: web::Data<StorageApiState>,
     user: AuthenticatedUser,
     path: web::Path<String>,
+    query: web::Query<ListQueryParams<VersionOrderField>>,
 ) -> Result<web::Json<ListVersionsResponse>, ApiError> {
     let file_id = path.into_inner();
     let response = state
         .storage_service
-        .list_versions(&user.user_id, &file_id)?;
+        .list_versions(&user.user_id, &file_id, &query)?;
     Ok(web::Json(response))
 }
 
@@ -533,22 +599,19 @@ pub async fn delete_version(
 }
 
 pub fn configure(conf: &mut web::ServiceConfig) {
-    conf.service(
-        web::scope("/drive")
-            .service(upload_file)
-            .service(list_files)
-            .service(get_file_metadata)
-            .service(preview_file)
-            .service(zip_contents)
-            .service(download_file)
-            .service(get_quota)
-            .service(upload_version)
-            .service(list_versions)
-            .service(get_version)
-            .service(update_version_label)
-            .service(restore_version)
-            .service(delete_version),
-    );
+    conf.service(upload_file)
+        .service(list_files)
+        .service(get_file_metadata)
+        .service(preview_file)
+        .service(zip_contents)
+        .service(download_file)
+        .service(get_quota)
+        .service(upload_version)
+        .service(list_versions)
+        .service(get_version)
+        .service(update_version_label)
+        .service(restore_version)
+        .service(delete_version);
 }
 
 #[derive(OpenApi)]
@@ -565,8 +628,10 @@ pub fn configure(conf: &mut web::ServiceConfig) {
         QuotaResponse,
         ZipContentsResponse,
         ZipEntry,
+        ZipEntryOrderField,
         FileVersionResponse,
         ListVersionsResponse,
+        VersionOrderField,
         UpdateVersionLabelRequest,
     )),
     tags(

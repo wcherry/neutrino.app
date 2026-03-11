@@ -12,6 +12,23 @@ pub enum FileOrderField {
     UpdatedAt,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub enum VersionOrderField {
+    VersionNumber,
+    CreatedAt,
+    Size,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub enum ZipEntryOrderField {
+    Name,
+    Size,
+    CompressedSize,
+    IsDir,
+}
+
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct FileMetadataResponse {

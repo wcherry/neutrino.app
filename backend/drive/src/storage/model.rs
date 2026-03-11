@@ -29,6 +29,7 @@ pub struct NewFileRecord<'a> {
     pub size_bytes: i64,
     pub mime_type: &'a str,
     pub storage_path: &'a str,
+    pub folder_id: Option<&'a str>,
 }
 
 #[allow(dead_code)]

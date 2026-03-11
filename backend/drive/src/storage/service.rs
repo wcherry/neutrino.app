@@ -1,8 +1,8 @@
-use crate::shared::{ApiError, ListQuery};
+use crate::shared::{apply_list_query, ApiError, ListQuery, ListQueryParams, OrderDirection};
 use crate::storage::{
     dto::{
         FileMetadataResponse, FileOrderField, FileVersionResponse, ListFilesResponse,
-        ListVersionsResponse, QuotaResponse,
+        ListVersionsResponse, QuotaResponse, VersionOrderField,
     },
     model::{NewFileRecord, NewFileVersionRecord, UpdateFileContent},
     repository::StorageRepository,
@@ -35,6 +35,7 @@ impl StorageService {
         file_name: &str,
         mime_type: &str,
         size_bytes: i64,
+        folder_id: Option<&str>,
     ) -> Result<FileMetadataResponse, ApiError> {
         let quota = self.repo.get_or_create_quota(user_id)?;
 
@@ -74,6 +75,7 @@ impl StorageService {
             size_bytes,
             mime_type,
             storage_path: &storage_key,
+            folder_id,
         };
 
         let file = self.repo.insert_file(new_file).inspect_err(|_| {
@@ -157,6 +159,7 @@ impl StorageService {
         &self,
         user_id: &str,
         file_id: &str,
+        query: &ListQueryParams<VersionOrderField>,
     ) -> Result<ListVersionsResponse, ApiError> {
         self.repo
             .find_file(file_id, user_id)?
@@ -164,6 +167,17 @@ impl StorageService {
 
         let versions = self.repo.list_versions(file_id)?;
         let total = versions.len();
+        let versions = apply_list_query(
+            versions,
+            query,
+            VersionOrderField::VersionNumber,
+            OrderDirection::Desc,
+            |a, b, order_by| match order_by {
+                VersionOrderField::VersionNumber => a.version_number.cmp(&b.version_number),
+                VersionOrderField::CreatedAt => a.created_at.cmp(&b.created_at),
+                VersionOrderField::Size => a.size_bytes.cmp(&b.size_bytes),
+            },
+        );
         Ok(ListVersionsResponse {
             versions: versions.into_iter().map(FileVersionResponse::from).collect(),
             total,

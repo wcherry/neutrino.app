@@ -1,13 +1,14 @@
 use crate::filesystem::{
     dto::{
         BulkMoveRequest, BulkResult, BulkTrashRequest, CreateFolderRequest, CreateShortcutRequest,
-        FileResponse, FolderContentsResponse, FolderResponse, ShortcutResponse,
-        TrashContentsResponse, UpdateFileRequest, UpdateFolderRequest,
+        FileResponse, FolderContentsOrderField, FolderContentsResponse, FolderResponse,
+        ShortcutResponse, TrashContentsResponse, TrashOrderField, UpdateFileRequest,
+        UpdateFolderRequest,
     },
     model::{NewFolderRecord, NewShortcutRecord, UpdateFolderRecord},
     repository::FilesystemRepository,
 };
-use crate::shared::ApiError;
+use crate::shared::{apply_list_query, ApiError, ListQueryParams, OrderDirection};
 use crate::storage::store::LocalFileStore;
 use chrono::{Duration, Utc};
 use std::sync::Arc;
@@ -51,6 +52,7 @@ impl FilesystemService {
         &self,
         user_id: &str,
         folder_id: Option<&str>,
+        query: &ListQueryParams<FolderContentsOrderField>,
     ) -> Result<FolderContentsResponse, ApiError> {
         // Validate folder exists if an ID is given
         let folder_response = if let Some(fid) = folder_id {
@@ -66,6 +68,43 @@ impl FilesystemService {
         let subfolders = self.repo.list_subfolders(user_id, folder_id)?;
         let files = self.repo.list_files_in_folder(user_id, folder_id)?;
         let shortcuts = self.repo.list_shortcuts_in_folder(user_id, folder_id)?;
+
+        let subfolders = apply_list_query(
+            subfolders,
+            query,
+            FolderContentsOrderField::Name,
+            OrderDirection::Asc,
+            |a, b, order_by| match order_by {
+                FolderContentsOrderField::Name => a.name.cmp(&b.name),
+                FolderContentsOrderField::CreatedAt => a.created_at.cmp(&b.created_at),
+                FolderContentsOrderField::UpdatedAt => a.updated_at.cmp(&b.updated_at),
+            },
+        );
+
+        let files = apply_list_query(
+            files,
+            query,
+            FolderContentsOrderField::Name,
+            OrderDirection::Asc,
+            |a, b, order_by| match order_by {
+                FolderContentsOrderField::Name => a.name.cmp(&b.name),
+                FolderContentsOrderField::CreatedAt => a.created_at.cmp(&b.created_at),
+                FolderContentsOrderField::UpdatedAt => a.updated_at.cmp(&b.updated_at),
+            },
+        );
+
+        let shortcuts = apply_list_query(
+            shortcuts,
+            query,
+            FolderContentsOrderField::CreatedAt,
+            OrderDirection::Asc,
+            |a, b, order_by| match order_by {
+                FolderContentsOrderField::Name => a.target_file_id.cmp(&b.target_file_id),
+                FolderContentsOrderField::CreatedAt | FolderContentsOrderField::UpdatedAt => {
+                    a.created_at.cmp(&b.created_at)
+                }
+            },
+        );
 
         Ok(FolderContentsResponse {
             folder: folder_response,
@@ -248,9 +287,41 @@ impl FilesystemService {
 
     // ── Trash operations ──────────────────────────────────────────────────────
 
-    pub fn list_trash(&self, user_id: &str) -> Result<TrashContentsResponse, ApiError> {
+    pub fn list_trash(
+        &self,
+        user_id: &str,
+        query: &ListQueryParams<TrashOrderField>,
+    ) -> Result<TrashContentsResponse, ApiError> {
         let files = self.repo.list_trashed_files(user_id)?;
         let folders = self.repo.list_trashed_folders(user_id)?;
+
+        let files = apply_list_query(
+            files,
+            query,
+            TrashOrderField::TrashedAt,
+            OrderDirection::Desc,
+            |a, b, order_by| match order_by {
+                TrashOrderField::Name => a.name.cmp(&b.name),
+                TrashOrderField::TrashedAt => a
+                    .trashed_at
+                    .unwrap_or(a.updated_at)
+                    .cmp(&b.trashed_at.unwrap_or(b.updated_at)),
+            },
+        );
+
+        let folders = apply_list_query(
+            folders,
+            query,
+            TrashOrderField::TrashedAt,
+            OrderDirection::Desc,
+            |a, b, order_by| match order_by {
+                TrashOrderField::Name => a.name.cmp(&b.name),
+                TrashOrderField::TrashedAt => a
+                    .trashed_at
+                    .unwrap_or(a.updated_at)
+                    .cmp(&b.trashed_at.unwrap_or(b.updated_at)),
+            },
+        );
 
         Ok(TrashContentsResponse {
             files: files

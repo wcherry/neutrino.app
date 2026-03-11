@@ -16,6 +16,7 @@ interface UploadEntry {
 
 interface UploadZoneProps {
   onClose: () => void;
+  folderId?: string | null;
 }
 
 function formatFileSize(bytes: number): string {
@@ -25,7 +26,7 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
 }
 
-export function UploadZone({ onClose }: UploadZoneProps) {
+export function UploadZone({ onClose, folderId }: UploadZoneProps) {
   const queryClient = useQueryClient();
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
@@ -39,10 +40,10 @@ export function UploadZone({ onClose }: UploadZoneProps) {
     mutationFn: ({ entry }: { entry: UploadEntry }) =>
       storageApi.uploadFile(entry.file, (progress) => {
         updateEntry(entry.id, { progress, status: 'uploading' });
-      }),
+      }, folderId),
     onSuccess: (_data, { entry }) => {
       updateEntry(entry.id, { status: 'done', progress: 100 });
-      queryClient.invalidateQueries({ queryKey: ['files'] });
+      queryClient.invalidateQueries({ queryKey: ['contents'] });
     },
     onError: (err, { entry }) => {
       updateEntry(entry.id, {

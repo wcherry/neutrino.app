@@ -1,14 +1,16 @@
 use crate::filesystem::{
     dto::{
         BulkMoveRequest, BulkResult, BulkTrashRequest, CreateFolderRequest, CreateShortcutRequest,
-        FolderContentsResponse, FolderResponse, FileResponse, ShortcutResponse,
-        TrashContentsResponse, UpdateFileRequest, UpdateFolderRequest,
+        FileResponse, FolderContentsOrderField, FolderContentsResponse, FolderResponse,
+        ShortcutResponse, TrashContentsResponse, TrashOrderField, UpdateFileRequest,
+        UpdateFolderRequest,
     },
     service::FilesystemService,
 };
-use crate::shared::{ApiError, AuthenticatedUser};
+use crate::shared::{ApiError, AuthenticatedUser, ListQueryParams};
 use actix_web::{delete, get, patch, post, web, HttpResponse};
 use std::sync::Arc;
+use log::info;
 use utoipa::OpenApi;
 
 pub struct FilesystemApiState {
@@ -43,27 +45,42 @@ pub async fn create_folder(
 #[utoipa::path(
     get,
     path = "/api/v1/drive/",
+    params(
+        ("limit" = Option<i64>, Query, description = "Max results per page"),
+        ("offset" = Option<i64>, Query, description = "Pagination offset"),
+        ("orderBy" = Option<FolderContentsOrderField>, Query, description = "Sort field"),
+        ("direction" = Option<String>, Query, description = "asc or desc"),
+    ),
     responses(
         (status = 200, description = "Root folder contents", body = FolderContentsResponse),
     ),
     security(("bearer_auth" = [])),
     tag = "filesystem"
 )]
-#[get("/")]
+#[get("")]
 pub async fn get_root_contents(
     state: web::Data<FilesystemApiState>,
     user: AuthenticatedUser,
+    query: web::Query<ListQueryParams<FolderContentsOrderField>>,
 ) -> Result<web::Json<FolderContentsResponse>, ApiError> {
+    info!("get_root_contents");
+    
     let contents = state
         .filesystem_service
-        .get_folder_contents(&user.user_id, None)?;
+        .get_folder_contents(&user.user_id, None, &query)?;
     Ok(web::Json(contents))
 }
 
 #[utoipa::path(
     get,
     path = "/api/v1/drive/folders/{id}",
-    params(("id" = String, Path, description = "Folder ID")),
+    params(
+        ("id" = String, Path, description = "Folder ID"),
+        ("limit" = Option<i64>, Query, description = "Max results per page"),
+        ("offset" = Option<i64>, Query, description = "Pagination offset"),
+        ("orderBy" = Option<FolderContentsOrderField>, Query, description = "Sort field"),
+        ("direction" = Option<String>, Query, description = "asc or desc"),
+    ),
     responses(
         (status = 200, description = "Folder contents", body = FolderContentsResponse),
         (status = 404, description = "Folder not found"),
@@ -76,11 +93,12 @@ pub async fn get_folder_contents(
     state: web::Data<FilesystemApiState>,
     user: AuthenticatedUser,
     path: web::Path<String>,
+    query: web::Query<ListQueryParams<FolderContentsOrderField>>,
 ) -> Result<web::Json<FolderContentsResponse>, ApiError> {
     let folder_id = path.into_inner();
     let contents = state
         .filesystem_service
-        .get_folder_contents(&user.user_id, Some(&folder_id))?;
+        .get_folder_contents(&user.user_id, Some(&folder_id), &query)?;
     Ok(web::Json(contents))
 }
 
@@ -333,6 +351,12 @@ pub async fn bulk_download(
 #[utoipa::path(
     get,
     path = "/api/v1/drive/trash",
+    params(
+        ("limit" = Option<i64>, Query, description = "Max results per page"),
+        ("offset" = Option<i64>, Query, description = "Pagination offset"),
+        ("orderBy" = Option<TrashOrderField>, Query, description = "Sort field"),
+        ("direction" = Option<String>, Query, description = "asc or desc"),
+    ),
     responses(
         (status = 200, description = "Trashed items", body = TrashContentsResponse),
     ),
@@ -343,8 +367,11 @@ pub async fn bulk_download(
 pub async fn list_trash(
     state: web::Data<FilesystemApiState>,
     user: AuthenticatedUser,
+    query: web::Query<ListQueryParams<TrashOrderField>>,
 ) -> Result<web::Json<TrashContentsResponse>, ApiError> {
-    let contents = state.filesystem_service.list_trash(&user.user_id)?;
+    let contents = state
+        .filesystem_service
+        .list_trash(&user.user_id, &query)?;
     Ok(web::Json(contents))
 }
 
@@ -461,27 +488,24 @@ pub async fn delete_folder_permanently(
 }
 
 pub fn configure(conf: &mut web::ServiceConfig) {
-    conf.service(
-        web::scope("/drive")
-            .service(create_folder)
-            .service(get_root_contents)
-            .service(get_folder_contents)
-            .service(update_folder)
-            .service(trash_folder)
-            .service(update_file)
-            .service(trash_file)
-            .service(create_shortcut)
-            .service(delete_shortcut)
-            .service(bulk_move)
-            .service(bulk_trash)
-            .service(bulk_download)
-            .service(list_trash)
-            .service(empty_trash)
-            .service(restore_file)
-            .service(delete_file_permanently)
-            .service(restore_folder)
-            .service(delete_folder_permanently),
-    );
+    conf.service(create_folder)
+        .service(get_root_contents)
+        .service(get_folder_contents)
+        .service(update_folder)
+        .service(trash_folder)
+        .service(update_file)
+        .service(trash_file)
+        .service(create_shortcut)
+        .service(delete_shortcut)
+        .service(bulk_move)
+        .service(bulk_trash)
+        .service(bulk_download)
+        .service(list_trash)
+        .service(empty_trash)
+        .service(restore_file)
+        .service(delete_file_permanently)
+        .service(restore_folder)
+        .service(delete_folder_permanently);
 }
 
 #[derive(OpenApi)]
@@ -511,6 +535,7 @@ pub fn configure(conf: &mut web::ServiceConfig) {
         UpdateFolderRequest,
         FolderResponse,
         FolderContentsResponse,
+        FolderContentsOrderField,
         UpdateFileRequest,
         FileResponse,
         CreateShortcutRequest,
@@ -519,6 +544,7 @@ pub fn configure(conf: &mut web::ServiceConfig) {
         BulkTrashRequest,
         BulkResult,
         TrashContentsResponse,
+        TrashOrderField,
         crate::filesystem::dto::TrashFileItem,
         crate::filesystem::dto::TrashFolderItem,
     )),

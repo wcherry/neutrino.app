@@ -181,6 +181,7 @@ struct DriveFolderView: View {
             files = response.files
         } catch {
             errorMessage = error.localizedDescription
+            NSLog("Error MSG: %@", error.localizedDescription ?? "Unknown error")
         }
         isLoading = false
     }

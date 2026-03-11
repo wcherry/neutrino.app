@@ -43,20 +43,20 @@ final class DriveService: ObservableObject {
     }
 
     func fetchRootContents() async throws -> FolderContentsResponse {
-        try await api.request("/api/v1/fs/")
+        try await api.request("/api/v1/drive?limit=100")
     }
 
     func fetchFolderContents(folderId: String) async throws -> FolderContentsResponse {
-        try await api.request("/api/v1/fs/folders/\(folderId)")
+        try await api.request("/api/v1/drive/folders/\(folderId)")
     }
 
     func createFolder(name: String, parentId: String?) async throws {
-        let _: FolderItem = try await api.request("/api/v1/fs/folders", method: "POST", body: CreateFolderRequest(name: name, parentId: parentId))
+        let _: FolderItem = try await api.request("/api/v1/drive/folders", method: "POST", body: CreateFolderRequest(name: name, parentId: parentId))
     }
 
     func toggleStar(file: FileItem) async throws -> FileItem {
         let updated: FileItem = try await api.request(
-            "/api/v1/fs/files/\(file.id)",
+            "/api/v1/drive/files/\(file.id)",
             method: "PATCH",
             body: UpdateFileRequest(name: nil, folderId: nil, isStarred: !file.isStarred)
         )
@@ -69,7 +69,7 @@ final class DriveService: ObservableObject {
     func moveFile(fileId: String, folderId: String?) async throws -> FileItem {
         let payload = UpdateFileRequest(name: nil, folderId: .some(folderId), isStarred: nil)
         let updated: FileItem = try await api.request(
-            "/api/v1/fs/files/\(fileId)",
+            "/api/v1/drive/files/\(fileId)",
             method: "PATCH",
             body: payload
         )
@@ -79,7 +79,7 @@ final class DriveService: ObservableObject {
     func uploadFile(localURL: URL) async throws -> FileItem {
         let name = localURL.lastPathComponent
         let mimeType = MimeType.infer(from: localURL)
-        let file = try await api.uploadMultipart("/api/v1/storage/files", fileURL: localURL, fileName: name, mimeType: mimeType)
+        let file = try await api.uploadMultipart("/api/v1/drive/files", fileURL: localURL, fileName: name, mimeType: mimeType)
         return file
     }
 
@@ -89,7 +89,7 @@ final class DriveService: ObservableObject {
             return cached
         }
 
-        let data = try await api.requestData("api/v1/storage/files/\(file.id)")
+        let data = try await api.requestData("api/v1/drive/files/\(file.id)")
         let directory = cache.cacheDirectory()
         let safeName = file.name.replacingOccurrences(of: "/", with: "_")
         let localURL = directory.appendingPathComponent("\(file.id)-\(safeName)")
@@ -101,7 +101,7 @@ final class DriveService: ObservableObject {
     func getShareURL(for file: FileItem) -> URL? {
         guard let base = URL(string: settings.baseUrl), !settings.baseUrl.isEmpty else { return nil }
         let token = auth.accessToken ?? ""
-        let path = "/api/v1/storage/files/\(file.id)"
+        let path = "/api/v1/drive/files/\(file.id)"
         guard let url = URL(string: path, relativeTo: base)?.absoluteURL else { return nil }
         var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
         components?.queryItems = [URLQueryItem(name: "token", value: token)]

@@ -104,6 +104,24 @@ export interface QuotaInfo {
 }
 
 // ---------------------------------------------------------------------------
+// Version types
+// ---------------------------------------------------------------------------
+
+export interface FileVersionItem {
+  id: string;
+  fileId: string;
+  versionNumber: number;
+  sizeBytes: number;
+  label: string | null;
+  createdAt: string;
+}
+
+export interface ListVersionsResponse {
+  versions: FileVersionItem[];
+  total: number;
+}
+
+// ---------------------------------------------------------------------------
 // Preview types
 // ---------------------------------------------------------------------------
 
@@ -124,11 +142,20 @@ export interface ZipContentsResponse {
 
 export interface Folder {
   id: string;
-  userId: string;
   name: string;
   parentId: string | null;
+  color: string | null;
+  isStarred: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface FolderContentsResponse {
+  /** Present when listing a non-root folder */
+  folder: Folder | null;
+  folders: Folder[];
+  files: FileItem[];
+  shortcuts: unknown[];
 }
 
 export interface FolderCreateRequest {
@@ -143,7 +170,9 @@ export interface FolderUpdateRequest {
 
 export interface FileUpdateRequest {
   name?: string;
-  parentFolderId?: string;
+  /** Move to folder (null = move to root) */
+  folderId?: string | null;
+  isStarred?: boolean;
 }
 
 export interface BulkMoveRequest {
@@ -308,10 +337,12 @@ export const authApi = {
 export const storageApi = {
   async uploadFile(
     file: File,
-    onProgress?: (percent: number) => void
+    onProgress?: (percent: number) => void,
+    folderId?: string | null,
   ): Promise<FileItem> {
     return new Promise((resolve, reject) => {
       const formData = new FormData();
+      if (folderId) formData.append('folder_id', folderId);
       formData.append('file', file);
 
       const xhr = new XMLHttpRequest();
@@ -418,6 +449,10 @@ export const storageApi = {
   async getZipContents(fileId: string): Promise<ZipContentsResponse> {
     return request<ZipContentsResponse>(`/api/v1/drive/files/${fileId}/zip-contents`);
   },
+
+  async listVersions(fileId: string): Promise<ListVersionsResponse> {
+    return request<ListVersionsResponse>(`/api/v1/drive/files/${fileId}/versions`);
+  },
 };
 
 // ---------------------------------------------------------------------------
@@ -425,94 +460,80 @@ export const storageApi = {
 // ---------------------------------------------------------------------------
 
 export const filesystemApi = {
+  // Folder contents (primary navigation)
+  async getRootContents(query: FileListQuery = {}): Promise<FolderContentsResponse> {
+    const { limit = 200, offset = 0, orderBy, direction } = query;
+    const qs = buildQuery({ limit, offset, orderBy, direction });
+    return request<FolderContentsResponse>(`/api/v1/drive${qs}`);
+  },
+
+  async getFolderContents(folderId: string, query: FileListQuery = {}): Promise<FolderContentsResponse> {
+    const { limit = 200, offset = 0, orderBy, direction } = query;
+    const qs = buildQuery({ limit, offset, orderBy, direction });
+    return request<FolderContentsResponse>(`/api/v1/drive/folders/${folderId}${qs}`);
+  },
+
   // Folders
   async createFolder(body: FolderCreateRequest): Promise<Folder> {
-    return request<Folder>('/api/v1/fs/folders', {
+    return request<Folder>('/api/v1/drive/folders', {
       method: 'POST',
       body: JSON.stringify(body),
     });
   },
 
-  async listFolders(parentId?: string): Promise<Folder[]> {
-    const qs = buildQuery({ parent_id: parentId });
-    return request<Folder[]>(`/api/v1/fs/folders${qs}`);
-  },
-
-  async getFolder(folderId: string): Promise<Folder> {
-    return request<Folder>(`/api/v1/fs/folders/${folderId}`);
-  },
-
   async updateFolder(folderId: string, body: FolderUpdateRequest): Promise<Folder> {
-    return request<Folder>(`/api/v1/fs/folders/${folderId}`, {
+    return request<Folder>(`/api/v1/drive/folders/${folderId}`, {
       method: 'PATCH',
       body: JSON.stringify(body),
     });
   },
 
   async deleteFolder(folderId: string): Promise<void> {
-    return request<void>(`/api/v1/fs/folders/${folderId}`, { method: 'DELETE' });
+    return request<void>(`/api/v1/drive/folders/${folderId}`, { method: 'DELETE' });
   },
 
   // File management
   async updateFile(fileId: string, body: FileUpdateRequest): Promise<FileItem> {
-    return request<FileItem>(`/api/v1/fs/files/${fileId}`, {
+    return request<FileItem>(`/api/v1/drive/files/${fileId}`, {
       method: 'PATCH',
       body: JSON.stringify(body),
     });
   },
 
-  // Trash
-  async trashItem(itemId: string, itemType: 'file' | 'folder'): Promise<void> {
-    return request<void>(`/api/v1/fs/trash`, {
-      method: 'POST',
-      body: JSON.stringify({ id: itemId, type: itemType }),
-    });
-  },
-
-  async restoreItem(itemId: string, itemType: 'file' | 'folder'): Promise<void> {
-    return request<void>(`/api/v1/fs/trash/${itemId}/restore`, {
-      method: 'POST',
-      body: JSON.stringify({ type: itemType }),
-    });
-  },
-
-  async listTrash(): Promise<(FileItem | Folder)[]> {
-    return request<(FileItem | Folder)[]>('/api/v1/fs/trash');
-  },
-
-  async emptyTrash(): Promise<void> {
-    return request<void>('/api/v1/fs/trash', { method: 'DELETE' });
-  },
-
   // Bulk operations
   async bulkMove(body: BulkMoveRequest): Promise<void> {
-    return request<void>('/api/v1/fs/bulk/move', {
+    return request<void>('/api/v1/drive/bulk/move', {
       method: 'POST',
       body: JSON.stringify(body),
     });
   },
 
   async bulkDelete(body: BulkDeleteRequest): Promise<void> {
-    return request<void>('/api/v1/fs/bulk/delete', {
+    return request<void>('/api/v1/drive/bulk/trash', {
       method: 'POST',
       body: JSON.stringify(body),
     });
+  },
+
+  // Trash
+  async listTrash(): Promise<{ files: unknown[]; folders: unknown[] }> {
+    return request<{ files: unknown[]; folders: unknown[] }>('/api/v1/drive/trash');
+  },
+
+  async emptyTrash(): Promise<void> {
+    return request<void>('/api/v1/drive/trash', { method: 'DELETE' });
   },
 
   // Shortcuts
   async createShortcut(body: ShortcutCreateRequest): Promise<Shortcut> {
-    return request<Shortcut>('/api/v1/fs/shortcuts', {
+    return request<Shortcut>('/api/v1/drive/shortcuts', {
       method: 'POST',
       body: JSON.stringify(body),
     });
   },
 
-  async listShortcuts(): Promise<Shortcut[]> {
-    return request<Shortcut[]>('/api/v1/fs/shortcuts');
-  },
-
   async deleteShortcut(shortcutId: string): Promise<void> {
-    return request<void>(`/api/v1/fs/shortcuts/${shortcutId}`, { method: 'DELETE' });
+    return request<void>(`/api/v1/drive/shortcuts/${shortcutId}`, { method: 'DELETE' });
   },
 };
 

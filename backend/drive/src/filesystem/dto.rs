@@ -99,6 +99,14 @@ pub struct FolderContentsResponse {
     pub shortcuts: Vec<ShortcutResponse>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub enum FolderContentsOrderField {
+    Name,
+    CreatedAt,
+    UpdatedAt,
+}
+
 // ── Shortcut DTOs ─────────────────────────────────────────────────────────────
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -199,4 +207,11 @@ impl From<FolderRecord> for TrashFolderItem {
 pub struct TrashContentsResponse {
     pub files: Vec<TrashFileItem>,
     pub folders: Vec<TrashFolderItem>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub enum TrashOrderField {
+    Name,
+    TrashedAt,
 }

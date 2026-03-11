@@ -57,12 +57,12 @@ A phased roadmap for building a Google Drive-competitive cloud storage and colla
 - [x] Typed API client for all backend endpoints (auth, storage, filesystem)
 - [x] TanStack Query + Zustand + React Hook Form + Zod integration
 - [x] WCAG AA accessibility (focus traps, ARIA, live regions, keyboard nav)
-- [ ] Authentication pages (sign up, sign in, sign out)
-- [ ] Sort by name, date modified, owner, size
-- [ ] Filter by file type and starred/shared
-- [ ] File info panel (metadata, activity, version count)
-- [ ] Upload via browser file picker and drag-and-drop
-- [ ] Context menu: rename, move, download, delete, star, copy link
+- [x] Authentication pages (sign up, sign in, sign out)
+- [x] Sort by name, date modified, owner, size
+- [x] Filter by file type and starred/shared
+- [x] File info panel (metadata, activity, version count)
+- [x] Upload via browser file picker and drag-and-drop
+- [x] Context menu: rename, move, download, delete, star, copy link
 
 ---
 
