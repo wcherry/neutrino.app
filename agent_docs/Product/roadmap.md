@@ -71,11 +71,11 @@ A phased roadmap for building a Google Drive-competitive cloud storage and colla
 **Goal:** Users can share files and folders with fine-grained access control.
 
 ### 2.1 Permission Model
-- [ ] Define roles: Owner, Editor, Commenter, Viewer
-- [ ] Assign roles per file and per folder
-- [ ] Folder-level permission inheritance (children inherit parent permissions)
-- [ ] Revoke access at any time
-- [ ] Transfer ownership between users
+- [x] Define roles: Owner, Editor, Commenter, Viewer
+- [x] Assign roles per file and per folder
+- [x] Folder-level permission inheritance (children inherit parent permissions)
+- [x] Revoke access at any time
+- [x] Transfer ownership between users
 
 ### 2.2 Link Sharing
 - [ ] Generate shareable links per file/folder

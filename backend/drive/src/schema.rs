@@ -68,6 +68,18 @@ diesel::table! {
     }
 }
 
+diesel::table! {
+    permissions (id) {
+        id -> Text,
+        resource_type -> Text,
+        resource_id -> Text,
+        user_id -> Text,
+        role -> Text,
+        granted_by -> Text,
+        created_at -> Timestamp,
+    }
+}
+
 diesel::joinable!(files -> folders (folder_id));
 diesel::joinable!(shortcuts -> files (target_file_id));
 diesel::joinable!(file_versions -> files (file_id));
@@ -78,4 +90,5 @@ diesel::allow_tables_to_appear_in_same_query!(
     folders,
     shortcuts,
     file_versions,
+    permissions,
 );

@@ -1,4 +1,5 @@
 use actix_web::{get, web, App, HttpResponse, HttpServer, Responder};
+use actix_cors::Cors;
 use diesel::r2d2::{ConnectionManager, Pool};
 use diesel::{RunQueryDsl, SqliteConnection};
 use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
@@ -124,6 +125,7 @@ async fn main() -> std::io::Result<()> {
             .app_data(pool_data.clone())
             .app_data(auth_state.clone())
             .app_data(token_service_data.clone())
+            .wrap(Cors::permissive())
             .service(health)
             .service(
                 web::scope("/api/v1")

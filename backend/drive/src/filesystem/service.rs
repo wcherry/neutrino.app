@@ -8,6 +8,7 @@ use crate::filesystem::{
     model::{NewFolderRecord, NewShortcutRecord, UpdateFolderRecord},
     repository::FilesystemRepository,
 };
+use crate::permissions::service::PermissionsService;
 use crate::shared::{apply_list_query, ApiError, ListQueryParams, OrderDirection};
 use crate::storage::store::LocalFileStore;
 use chrono::{Duration, Utc};
@@ -17,11 +18,20 @@ use uuid::Uuid;
 pub struct FilesystemService {
     repo: Arc<FilesystemRepository>,
     store: Arc<LocalFileStore>,
+    permissions: Arc<PermissionsService>,
 }
 
 impl FilesystemService {
-    pub fn new(repo: Arc<FilesystemRepository>, store: Arc<LocalFileStore>) -> Self {
-        FilesystemService { repo, store }
+    pub fn new(
+        repo: Arc<FilesystemRepository>,
+        store: Arc<LocalFileStore>,
+        permissions: Arc<PermissionsService>,
+    ) -> Self {
+        FilesystemService {
+            repo,
+            store,
+            permissions,
+        }
     }
 
     // ── Folder operations ─────────────────────────────────────────────────────
@@ -45,6 +55,11 @@ impl FilesystemService {
         };
 
         let folder = self.repo.create_folder(record)?;
+
+        if let Err(e) = self.permissions.grant_ownership(user_id, "folder", &id) {
+            log::error!("Failed to grant ownership for folder {}: {:?}", id, e);
+        }
+
         Ok(FolderResponse::from(folder))
     }
 

@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 shared = { path = "../shared" }
 actix-web = "4"
+actix-cors = "0.7.1"
 diesel = { version = "2", features = ["sqlite", "r2d2", "chrono"] }
 diesel_migrations = "2"
 serde = { version = "1", features = ["derive"] }

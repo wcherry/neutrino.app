@@ -1,3 +1,4 @@
+use crate::permissions::service::PermissionsService;
 use crate::shared::{apply_list_query, ApiError, ListQuery, ListQueryParams, OrderDirection};
 use crate::storage::{
     dto::{
@@ -18,11 +19,20 @@ const MAX_VERSIONS: i64 = 100;
 pub struct StorageService {
     repo: Arc<StorageRepository>,
     store: Arc<LocalFileStore>,
+    permissions: Arc<PermissionsService>,
 }
 
 impl StorageService {
-    pub fn new(repo: Arc<StorageRepository>, store: Arc<LocalFileStore>) -> Self {
-        StorageService { repo, store }
+    pub fn new(
+        repo: Arc<StorageRepository>,
+        store: Arc<LocalFileStore>,
+        permissions: Arc<PermissionsService>,
+    ) -> Self {
+        StorageService {
+            repo,
+            store,
+            permissions,
+        }
     }
 
     /// Called after a file has been streamed to `temp_path`.
@@ -81,6 +91,10 @@ impl StorageService {
         let file = self.repo.insert_file(new_file).inspect_err(|_| {
             let _ = std::fs::remove_file(&final_path);
         })?;
+
+        if let Err(e) = self.permissions.grant_ownership(user_id, "file", &file_id) {
+            log::error!("Failed to grant ownership for file {}: {:?}", file_id, e);
+        }
 
         if let Err(e) = self.repo.update_quota_after_upload(
             user_id,

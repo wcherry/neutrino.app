@@ -6,10 +6,11 @@ use log::{error, info};
 use serde_json::json;
 use std::sync::Arc;
 use utoipa::OpenApi;
-use utoipa_swagger_ui::SwaggerUi;
-
+use utoipa_swagger_ui::{SwaggerUi, Config as SwaggerConfig};
+use actix_cors::Cors;
 mod config;
 mod filesystem;
+mod permissions;
 mod schema;
 mod shared;
 mod storage;
@@ -19,6 +20,11 @@ use crate::filesystem::{
     api::{FilesystemApiDoc, FilesystemApiState},
     repository::FilesystemRepository,
     service::FilesystemService,
+};
+use crate::permissions::{
+    api::{PermissionsApiDoc, PermissionsApiState},
+    repository::PermissionsRepository,
+    service::PermissionsService,
 };
 use crate::shared::TokenService;
 use crate::storage::{
@@ -115,8 +121,19 @@ async fn main() -> std::io::Result<()> {
         }),
     );
 
+    // Permissions setup (shared across storage and filesystem)
+    let permissions_repo = Arc::new(PermissionsRepository::new(pool.clone()));
+    let permissions_service = Arc::new(PermissionsService::new(permissions_repo));
+    let permissions_state = web::Data::new(PermissionsApiState {
+        permissions_service: permissions_service.clone(),
+    });
+
     let storage_repo = Arc::new(StorageRepository::new(pool.clone()));
-    let storage_service = Arc::new(StorageService::new(storage_repo, file_store.clone()));
+    let storage_service = Arc::new(StorageService::new(
+        storage_repo,
+        file_store.clone(),
+        permissions_service.clone(),
+    ));
 
     let storage_state = web::Data::new(StorageApiState {
         storage_service: storage_service.clone(),
@@ -124,7 +141,7 @@ async fn main() -> std::io::Result<()> {
 
     // Filesystem setup
     let fs_repo = Arc::new(FilesystemRepository::new(pool.clone()));
-    let fs_service = Arc::new(FilesystemService::new(fs_repo, file_store));
+    let fs_service = Arc::new(FilesystemService::new(fs_repo, file_store, permissions_service));
     let fs_state = web::Data::new(FilesystemApiState {
         filesystem_service: fs_service,
     });
@@ -142,23 +159,32 @@ async fn main() -> std::io::Result<()> {
     HttpServer::new(move || {
         let mut openapi = StorageApiDoc::openapi();
         openapi.merge(FilesystemApiDoc::openapi());
+        openapi.merge(PermissionsApiDoc::openapi());
+        let config = SwaggerConfig::new(vec![
+            "http://localhost:8881/api-docs/openapi.json",
+            "http://localhost:8882/api-docs/openapi.json"
+        ]);
 
         App::new()
             .app_data(web::PayloadConfig::new(max_upload_bytes))
             .app_data(pool_data.clone())
             .app_data(storage_state.clone())
             .app_data(fs_state.clone())
+            .app_data(permissions_state.clone())
             .app_data(token_service_data.clone())
             .wrap(Logger::default())
+            .wrap(Cors::permissive())
             .service(health)
             .service(
                 web::scope("/api/v1/drive")
                     .configure(storage::api::configure)
-                    .configure(filesystem::api::configure),
+                    .configure(filesystem::api::configure)
+                    .configure(permissions::api::configure),
             )
             .service(
                 SwaggerUi::new("/swagger-ui/{_:.*}")
-                    .url("/api-docs/openapi.json", openapi),
+                    .url("/api-docs/openapi.json", openapi)
+                    .config(config.clone()), 
             )
     })
     .bind(&bind_addr)?
