@@ -30,6 +30,8 @@ pub struct PermissionResponse {
     pub resource_type: String,
     pub resource_id: String,
     pub user_id: String,
+    pub user_email: String,
+    pub user_name: String,
     pub role: String,
     pub granted_by: String,
     pub created_at: String,
@@ -42,6 +44,8 @@ impl From<PermissionRecord> for PermissionResponse {
             resource_type: r.resource_type,
             resource_id: r.resource_id,
             user_id: r.user_id,
+            user_email: r.user_email,
+            user_name: r.user_name,
             role: r.role,
             granted_by: r.granted_by,
             created_at: r.created_at.to_string(),
@@ -59,6 +63,8 @@ pub struct ListPermissionsResponse {
 #[serde(rename_all = "camelCase")]
 pub struct GrantPermissionRequest {
     pub user_id: String,
+    pub user_email: String,
+    pub user_name: String,
     pub role: Role,
 }
 

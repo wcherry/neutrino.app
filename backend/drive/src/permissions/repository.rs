@@ -184,4 +184,41 @@ impl PermissionsRepository {
                 ApiError::internal("Database error")
             })
     }
+
+    /// Returns all resource IDs of the given type where the user has owner role.
+    pub fn list_owned_resource_ids(
+        &self,
+        user_id: &str,
+        resource_type: &str,
+    ) -> Result<Vec<String>, ApiError> {
+        let mut conn = self.get_conn()?;
+        permissions::table
+            .filter(permissions::user_id.eq(user_id))
+            .filter(permissions::resource_type.eq(resource_type))
+            .filter(permissions::role.eq("owner"))
+            .select(permissions::resource_id)
+            .load::<String>(&mut conn)
+            .map_err(|e| {
+                log::error!("DB list owned resource IDs error: {:?}", e);
+                ApiError::internal("Database error")
+            })
+    }
+
+    /// Returns all permissions for the current user on resources they do NOT own
+    /// (for "shared with me" view). Returns (resource_type, resource_id, role).
+    pub fn list_shared_with_user(
+        &self,
+        user_id: &str,
+    ) -> Result<Vec<crate::permissions::model::PermissionRecord>, ApiError> {
+        let mut conn = self.get_conn()?;
+        permissions::table
+            .filter(permissions::user_id.eq(user_id))
+            .filter(permissions::role.ne("owner"))
+            .select(crate::permissions::model::PermissionRecord::as_select())
+            .load(&mut conn)
+            .map_err(|e| {
+                log::error!("DB list shared with user error: {:?}", e);
+                ApiError::internal("Database error")
+            })
+    }
 }

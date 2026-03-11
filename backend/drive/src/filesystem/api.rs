@@ -5,16 +5,21 @@ use crate::filesystem::{
         ShortcutResponse, TrashContentsResponse, TrashOrderField, UpdateFileRequest,
         UpdateFolderRequest,
     },
+    repository::FilesystemRepository,
     service::FilesystemService,
 };
+use crate::permissions::repository::PermissionsRepository;
 use crate::shared::{ApiError, AuthenticatedUser, ListQueryParams};
 use actix_web::{delete, get, patch, post, web, HttpResponse};
+use serde::Serialize;
 use std::sync::Arc;
 use log::info;
 use utoipa::OpenApi;
 
 pub struct FilesystemApiState {
     pub filesystem_service: Arc<FilesystemService>,
+    pub filesystem_repo: Arc<FilesystemRepository>,
+    pub permissions_repo: Arc<PermissionsRepository>,
 }
 
 // ── Folder endpoints ──────────────────────────────────────────────────────────
@@ -487,6 +492,69 @@ pub async fn delete_folder_permanently(
     Ok(HttpResponse::NoContent().finish())
 }
 
+// ── Shared with me ────────────────────────────────────────────────────────────
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SharedWithMeResponse {
+    pub files: Vec<FileResponse>,
+    pub folders: Vec<FolderResponse>,
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/v1/drive/shared-with-me",
+    responses(
+        (status = 200, description = "Files and folders shared with the current user"),
+    ),
+    security(("bearer_auth" = [])),
+    tag = "filesystem"
+)]
+#[get("/shared-with-me")]
+pub async fn get_shared_with_me(
+    state: web::Data<FilesystemApiState>,
+    user: AuthenticatedUser,
+) -> Result<web::Json<SharedWithMeResponse>, ApiError> {
+    let perms = state
+        .permissions_repo
+        .list_shared_with_user(&user.user_id)?;
+
+    let file_ids: Vec<String> = perms
+        .iter()
+        .filter(|p| p.resource_type == "file")
+        .map(|p| p.resource_id.clone())
+        .collect();
+    let folder_ids: Vec<String> = perms
+        .iter()
+        .filter(|p| p.resource_type == "folder")
+        .map(|p| p.resource_id.clone())
+        .collect();
+
+    let files = if file_ids.is_empty() {
+        vec![]
+    } else {
+        state
+            .filesystem_repo
+            .find_files_by_ids_shared(&file_ids)?
+            .into_iter()
+            .map(FileResponse::from)
+            .collect()
+    };
+
+    let folders = if folder_ids.is_empty() {
+        vec![]
+    } else {
+        state
+            .filesystem_repo
+            .find_folders_by_ids_shared(&folder_ids)?
+            .into_iter()
+            .map(FolderResponse::from)
+            .collect()
+    };
+
+    Ok(web::Json(SharedWithMeResponse { files, folders }))
+}
+
 pub fn configure(conf: &mut web::ServiceConfig) {
     conf.service(create_folder)
         .service(get_root_contents)
@@ -505,7 +573,8 @@ pub fn configure(conf: &mut web::ServiceConfig) {
         .service(restore_file)
         .service(delete_file_permanently)
         .service(restore_folder)
-        .service(delete_folder_permanently);
+        .service(delete_folder_permanently)
+        .service(get_shared_with_me);
 }
 
 #[derive(OpenApi)]
@@ -529,6 +598,7 @@ pub fn configure(conf: &mut web::ServiceConfig) {
         delete_file_permanently,
         restore_folder,
         delete_folder_permanently,
+        get_shared_with_me,
     ),
     components(schemas(
         CreateFolderRequest,

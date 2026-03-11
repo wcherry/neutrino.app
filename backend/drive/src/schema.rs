@@ -93,6 +93,25 @@ diesel::table! {
         role -> Text,
         granted_by -> Text,
         created_at -> Timestamp,
+        // Added in migration 010
+        user_email -> Text,
+        user_name -> Text,
+    }
+}
+
+diesel::table! {
+    access_requests (id) {
+        id -> Text,
+        resource_type -> Text,
+        resource_id -> Text,
+        requester_id -> Text,
+        requester_email -> Text,
+        requester_name -> Text,
+        message -> Nullable<Text>,
+        requested_role -> Text,
+        status -> Text,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
     }
 }
 
@@ -108,4 +127,5 @@ diesel::allow_tables_to_appear_in_same_query!(
     file_versions,
     permissions,
     share_links,
+    access_requests,
 );

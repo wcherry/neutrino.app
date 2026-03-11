@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useRef } from 'react';
-import { Info, Pencil, Star, StarOff, Download, Trash2, Link } from 'lucide-react';
+import { Info, Pencil, Star, StarOff, Download, Trash2, Link, Share2 } from 'lucide-react';
 import { type FileItem } from '@/lib/api';
 import styles from './FileContextMenu.module.css';
 
@@ -16,6 +16,7 @@ interface Props {
   onDownload: () => void;
   onDelete: () => void;
   onCopyLink: () => void;
+  onShare: () => void;
 }
 
 export function FileContextMenu({
@@ -29,6 +30,7 @@ export function FileContextMenu({
   onDownload,
   onDelete,
   onCopyLink,
+  onShare,
 }: Props) {
   const ref = useRef<HTMLDivElement>(null);
 
@@ -49,10 +51,11 @@ export function FileContextMenu({
 
   // Adjust position to stay within viewport
   const adjustedX = Math.min(x, window.innerWidth - 200);
-  const adjustedY = Math.min(y, window.innerHeight - 280);
+  const adjustedY = Math.min(y, window.innerHeight - 320);
 
   const items = [
     { icon: <Info size={14} />, label: 'File info', action: onInfo },
+    { icon: <Share2 size={14} />, label: 'Share', action: onShare },
     { icon: <Pencil size={14} />, label: 'Rename', action: onRename },
     {
       icon: file.isStarred ? <StarOff size={14} /> : <Star size={14} />,

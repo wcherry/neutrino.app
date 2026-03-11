@@ -35,6 +35,8 @@ impl PermissionsService {
             user_id,
             role: "owner",
             granted_by: user_id,
+            user_email: "",
+            user_name: "",
         };
         self.repo.upsert_permission(&record)?;
         Ok(())
@@ -80,6 +82,10 @@ impl PermissionsService {
                 "Cannot grant Owner role directly. Use transfer-ownership instead.",
             ));
         }
+        log::info!(
+            "Sharing notification: granting {} role on {} {} to {} ({})",
+            req.role.as_str(), resource_type, resource_id, req.user_email, req.user_id
+        );
         let id = Uuid::new_v4().to_string();
         let record = NewPermissionRecord {
             id: &id,
@@ -88,6 +94,8 @@ impl PermissionsService {
             user_id: &req.user_id,
             role: req.role.as_str(),
             granted_by: caller_id,
+            user_email: &req.user_email,
+            user_name: &req.user_name,
         };
         let perm = self.repo.upsert_permission(&record)?;
         Ok(PermissionResponse::from(perm))
@@ -207,6 +215,8 @@ impl PermissionsService {
             user_id: &req.new_owner_id,
             role: "owner",
             granted_by: caller_id,
+            user_email: "",
+            user_name: "",
         };
         self.repo.upsert_permission(&record)?;
         Ok(())

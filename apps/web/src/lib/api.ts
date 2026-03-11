@@ -538,6 +538,288 @@ export const filesystemApi = {
 };
 
 // ---------------------------------------------------------------------------
+// Permissions types
+// ---------------------------------------------------------------------------
+
+export type PermissionRole = 'owner' | 'editor' | 'commenter' | 'viewer';
+export type ResourceType = 'file' | 'folder';
+
+export interface Permission {
+  id: string;
+  resourceType: string;
+  resourceId: string;
+  userId: string;
+  userEmail: string;
+  userName: string;
+  role: string;
+  grantedBy: string;
+  createdAt: string;
+}
+
+export interface ListPermissionsResponse {
+  permissions: Permission[];
+}
+
+export interface GrantPermissionRequest {
+  userId: string;
+  userEmail: string;
+  userName: string;
+  role: PermissionRole;
+}
+
+export interface UpdatePermissionRequest {
+  role: PermissionRole;
+}
+
+// ---------------------------------------------------------------------------
+// Sharing (share link) types
+// ---------------------------------------------------------------------------
+
+export interface ShareLink {
+  id: string;
+  resourceType: string;
+  resourceId: string;
+  token: string;
+  visibility: 'public' | 'anyoneWithLink';
+  role: 'viewer' | 'commenter' | 'editor';
+  expiresAt: string | null;
+  isActive: boolean;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UpsertShareLinkRequest {
+  visibility?: 'public' | 'anyoneWithLink';
+  role?: 'viewer' | 'commenter' | 'editor';
+  expiresAt?: string | null;
+}
+
+export interface UpdateShareLinkRequest {
+  visibility?: 'public' | 'anyoneWithLink';
+  role?: 'viewer' | 'commenter' | 'editor';
+  expiresAt?: string | null;
+  isActive?: boolean;
+}
+
+export interface ResolvedShareLink {
+  resourceType: string;
+  resourceId: string;
+  role: string;
+  visibility: string;
+  expiresAt: string | null;
+  resourceName: string;
+}
+
+// ---------------------------------------------------------------------------
+// User lookup types
+// ---------------------------------------------------------------------------
+
+export interface UserLookup {
+  id: string;
+  email: string;
+  name: string;
+}
+
+// ---------------------------------------------------------------------------
+// Access request types
+// ---------------------------------------------------------------------------
+
+export interface AccessRequest {
+  id: string;
+  resourceType: string;
+  resourceId: string;
+  requesterId: string;
+  requesterEmail: string;
+  requesterName: string;
+  message: string | null;
+  requestedRole: string;
+  status: 'pending' | 'approved' | 'denied';
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ListAccessRequestsResponse {
+  requests: AccessRequest[];
+}
+
+export interface CreateAccessRequestRequest {
+  message?: string;
+  requestedRole?: string;
+  requesterName: string;
+}
+
+export interface ApproveAccessRequestRequest {
+  role?: string;
+  requesterEmail: string;
+  requesterName: string;
+}
+
+// ---------------------------------------------------------------------------
+// Shared with me types
+// ---------------------------------------------------------------------------
+
+export interface SharedWithMeResponse {
+  files: FileItem[];
+  folders: Folder[];
+}
+
+// ---------------------------------------------------------------------------
+// Permissions API
+// ---------------------------------------------------------------------------
+
+export const permissionsApi = {
+  async listPermissions(resourceType: ResourceType, resourceId: string): Promise<ListPermissionsResponse> {
+    const path = resourceType === 'file'
+      ? `/api/v1/drive/files/${resourceId}/permissions`
+      : `/api/v1/drive/folders/${resourceId}/permissions`;
+    return request<ListPermissionsResponse>(path);
+  },
+
+  async grantPermission(resourceType: ResourceType, resourceId: string, body: GrantPermissionRequest): Promise<Permission> {
+    const path = resourceType === 'file'
+      ? `/api/v1/drive/files/${resourceId}/permissions`
+      : `/api/v1/drive/folders/${resourceId}/permissions`;
+    return request<Permission>(path, { method: 'POST', body: JSON.stringify(body) });
+  },
+
+  async updatePermission(resourceType: ResourceType, resourceId: string, userId: string, body: UpdatePermissionRequest): Promise<Permission> {
+    const path = resourceType === 'file'
+      ? `/api/v1/drive/files/${resourceId}/permissions/${userId}`
+      : `/api/v1/drive/folders/${resourceId}/permissions/${userId}`;
+    return request<Permission>(path, { method: 'PATCH', body: JSON.stringify(body) });
+  },
+
+  async revokePermission(resourceType: ResourceType, resourceId: string, userId: string): Promise<void> {
+    const path = resourceType === 'file'
+      ? `/api/v1/drive/files/${resourceId}/permissions/${userId}`
+      : `/api/v1/drive/folders/${resourceId}/permissions/${userId}`;
+    return request<void>(path, { method: 'DELETE' });
+  },
+
+  async transferOwnership(resourceType: ResourceType, resourceId: string, newOwnerId: string): Promise<void> {
+    const path = resourceType === 'file'
+      ? `/api/v1/drive/files/${resourceId}/transfer-ownership`
+      : `/api/v1/drive/folders/${resourceId}/transfer-ownership`;
+    return request<void>(path, { method: 'POST', body: JSON.stringify({ newOwnerId }) });
+  },
+};
+
+// ---------------------------------------------------------------------------
+// Sharing (share link) API
+// ---------------------------------------------------------------------------
+
+export const sharingApi = {
+  async getShareLink(resourceType: ResourceType, resourceId: string): Promise<ShareLink | null> {
+    const path = resourceType === 'file'
+      ? `/api/v1/drive/files/${resourceId}/share-link`
+      : `/api/v1/drive/folders/${resourceId}/share-link`;
+    try {
+      return await request<ShareLink>(path);
+    } catch (e) {
+      if (e instanceof ApiClientError && e.statusCode === 404) return null;
+      throw e;
+    }
+  },
+
+  async upsertShareLink(resourceType: ResourceType, resourceId: string, body: UpsertShareLinkRequest): Promise<ShareLink> {
+    const path = resourceType === 'file'
+      ? `/api/v1/drive/files/${resourceId}/share-link`
+      : `/api/v1/drive/folders/${resourceId}/share-link`;
+    return request<ShareLink>(path, { method: 'PUT', body: JSON.stringify(body) });
+  },
+
+  async updateShareLink(resourceType: ResourceType, resourceId: string, body: UpdateShareLinkRequest): Promise<ShareLink> {
+    const path = resourceType === 'file'
+      ? `/api/v1/drive/files/${resourceId}/share-link`
+      : `/api/v1/drive/folders/${resourceId}/share-link`;
+    return request<ShareLink>(path, { method: 'PATCH', body: JSON.stringify(body) });
+  },
+
+  async deleteShareLink(resourceType: ResourceType, resourceId: string): Promise<void> {
+    const path = resourceType === 'file'
+      ? `/api/v1/drive/files/${resourceId}/share-link`
+      : `/api/v1/drive/folders/${resourceId}/share-link`;
+    return request<void>(path, { method: 'DELETE' });
+  },
+
+  async resolveToken(token: string): Promise<ResolvedShareLink> {
+    return request<ResolvedShareLink>(`/api/v1/share/${token}`);
+  },
+};
+
+// ---------------------------------------------------------------------------
+// Users API
+// ---------------------------------------------------------------------------
+
+export const usersApi = {
+  async lookupByEmail(email: string): Promise<UserLookup | null> {
+    try {
+      return await request<UserLookup>(`/api/v1/auth/users/lookup?email=${encodeURIComponent(email)}`);
+    } catch (e) {
+      if (e instanceof ApiClientError && e.statusCode === 404) return null;
+      throw e;
+    }
+  },
+
+  async getById(userId: string): Promise<UserLookup | null> {
+    try {
+      return await request<UserLookup>(`/api/v1/auth/users/${userId}`);
+    } catch (e) {
+      if (e instanceof ApiClientError && e.statusCode === 404) return null;
+      throw e;
+    }
+  },
+};
+
+// ---------------------------------------------------------------------------
+// Access Requests API
+// ---------------------------------------------------------------------------
+
+export const accessRequestsApi = {
+  async requestFileAccess(fileId: string, body: CreateAccessRequestRequest): Promise<AccessRequest> {
+    return request<AccessRequest>(`/api/v1/drive/files/${fileId}/request-access`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  },
+
+  async requestFolderAccess(folderId: string, body: CreateAccessRequestRequest): Promise<AccessRequest> {
+    return request<AccessRequest>(`/api/v1/drive/folders/${folderId}/request-access`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  },
+
+  async listPending(): Promise<ListAccessRequestsResponse> {
+    return request<ListAccessRequestsResponse>('/api/v1/drive/access-requests');
+  },
+
+  async approve(requestId: string, body: ApproveAccessRequestRequest): Promise<AccessRequest> {
+    return request<AccessRequest>(`/api/v1/drive/access-requests/${requestId}/approve`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  },
+
+  async deny(requestId: string): Promise<AccessRequest> {
+    return request<AccessRequest>(`/api/v1/drive/access-requests/${requestId}/deny`, {
+      method: 'POST',
+    });
+  },
+};
+
+// ---------------------------------------------------------------------------
+// Shared With Me API
+// ---------------------------------------------------------------------------
+
+export const sharedWithMeApi = {
+  async list(): Promise<SharedWithMeResponse> {
+    return request<SharedWithMeResponse>('/api/v1/drive/shared-with-me');
+  },
+};
+
+// ---------------------------------------------------------------------------
 // Convenience re-exports
 // ---------------------------------------------------------------------------
 

@@ -13,6 +13,8 @@ pub struct PermissionRecord {
     pub role: String,
     pub granted_by: String,
     pub created_at: NaiveDateTime,
+    pub user_email: String,
+    pub user_name: String,
 }
 
 #[derive(Debug, Insertable)]
@@ -24,4 +26,6 @@ pub struct NewPermissionRecord<'a> {
     pub user_id: &'a str,
     pub role: &'a str,
     pub granted_by: &'a str,
+    pub user_email: &'a str,
+    pub user_name: &'a str,
 }

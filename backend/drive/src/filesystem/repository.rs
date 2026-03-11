@@ -719,6 +719,40 @@ impl FilesystemRepository {
         })
     }
 
+    /// Fetch files by IDs regardless of owner (for shared-with-me view).
+    pub fn find_files_by_ids_shared(
+        &self,
+        file_ids: &[String],
+    ) -> Result<Vec<FileRecord>, ApiError> {
+        let mut conn = self.get_conn()?;
+        files::table
+            .filter(files::id.eq_any(file_ids))
+            .filter(files::is_trashed.eq(false))
+            .select(FileRecord::as_select())
+            .load(&mut conn)
+            .map_err(|e| {
+                log::error!("DB find shared files error: {:?}", e);
+                ApiError::internal("Database error")
+            })
+    }
+
+    /// Fetch folders by IDs regardless of owner (for shared-with-me view).
+    pub fn find_folders_by_ids_shared(
+        &self,
+        folder_ids: &[String],
+    ) -> Result<Vec<FolderRecord>, ApiError> {
+        let mut conn = self.get_conn()?;
+        folders::table
+            .filter(folders::id.eq_any(folder_ids))
+            .filter(folders::is_trashed.eq(false))
+            .select(FolderRecord::as_select())
+            .load(&mut conn)
+            .map_err(|e| {
+                log::error!("DB find shared folders error: {:?}", e);
+                ApiError::internal("Database error")
+            })
+    }
+
     fn get_conn(
         &self,
     ) -> Result<diesel::r2d2::PooledConnection<ConnectionManager<SqliteConnection>>, ApiError>

@@ -38,6 +38,7 @@ import { UploadZone } from './UploadZone';
 import { PreviewModal } from './PreviewModal';
 import { FileContextMenu } from './FileContextMenu';
 import { FileInfoPanel } from './FileInfoPanel';
+import { ShareDialog } from './ShareDialog';
 import styles from './page.module.css';
 
 type ViewMode = 'large' | 'small' | 'list';
@@ -161,6 +162,7 @@ export default function DrivePage() {
   const [filter, setFilter] = useState<FilterType>('all');
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [infoFile, setInfoFile] = useState<FileItem | null>(null);
+  const [shareFile, setShareFile] = useState<FileItem | null>(null);
   const [renaming, setRenaming] = useState<FileItem | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const renameInputRef = useRef<HTMLInputElement>(null);
@@ -598,11 +600,20 @@ export default function DrivePage() {
           y={contextMenu.y}
           onClose={() => setContextMenu(null)}
           onInfo={() => { setInfoFile(contextMenu.file); setContextMenu(null); }}
+          onShare={() => { setShareFile(contextMenu.file); setContextMenu(null); }}
           onRename={() => { openRename(contextMenu.file); setContextMenu(null); }}
           onStarToggle={() => { handleStar(contextMenu.file); setContextMenu(null); }}
           onDownload={() => { handleDownload(contextMenu.file); setContextMenu(null); }}
           onDelete={() => { handleDelete(contextMenu.file); setContextMenu(null); }}
           onCopyLink={() => { handleCopyLink(contextMenu.file); setContextMenu(null); }}
+        />
+      )}
+
+      {shareFile && (
+        <ShareDialog
+          resource={shareFile}
+          resourceType="file"
+          onClose={() => setShareFile(null)}
         />
       )}
 

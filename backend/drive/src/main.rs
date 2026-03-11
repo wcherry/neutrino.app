@@ -8,6 +8,7 @@ use std::sync::Arc;
 use utoipa::OpenApi;
 use utoipa_swagger_ui::{SwaggerUi, Config as SwaggerConfig};
 use actix_cors::Cors;
+mod access_requests;
 mod config;
 mod filesystem;
 mod permissions;
@@ -16,6 +17,11 @@ mod shared;
 mod sharing;
 mod storage;
 
+use crate::access_requests::{
+    api::{AccessRequestsApiDoc, AccessRequestsApiState},
+    repository::AccessRequestsRepository,
+    service::AccessRequestsService,
+};
 use crate::config::Config;
 use crate::filesystem::{
     api::{FilesystemApiDoc, FilesystemApiState},
@@ -129,7 +135,7 @@ async fn main() -> std::io::Result<()> {
 
     // Permissions setup (shared across storage and filesystem)
     let permissions_repo = Arc::new(PermissionsRepository::new(pool.clone()));
-    let permissions_service = Arc::new(PermissionsService::new(permissions_repo));
+    let permissions_service = Arc::new(PermissionsService::new(permissions_repo.clone()));
     let permissions_state = web::Data::new(PermissionsApiState {
         permissions_service: permissions_service.clone(),
     });
@@ -148,19 +154,32 @@ async fn main() -> std::io::Result<()> {
     // Filesystem setup
     let fs_repo = Arc::new(FilesystemRepository::new(pool.clone()));
     let fs_service = Arc::new(FilesystemService::new(
-        fs_repo,
+        fs_repo.clone(),
         file_store,
         permissions_service.clone(),
     ));
     let fs_state = web::Data::new(FilesystemApiState {
         filesystem_service: fs_service,
+        filesystem_repo: fs_repo,
+        permissions_repo: permissions_repo.clone(),
     });
 
     // Sharing setup
     let sharing_repo = Arc::new(SharingRepository::new(pool.clone()));
-    let sharing_service = Arc::new(SharingService::new(sharing_repo, permissions_service));
+    let sharing_service = Arc::new(SharingService::new(sharing_repo, permissions_service.clone()));
     let sharing_state = web::Data::new(SharingApiState {
         sharing_service,
+    });
+
+    // Access requests setup
+    let access_requests_repo = Arc::new(AccessRequestsRepository::new(pool.clone()));
+    let access_requests_service = Arc::new(AccessRequestsService::new(
+        access_requests_repo,
+        permissions_repo,
+        permissions_service,
+    ));
+    let access_requests_state = web::Data::new(AccessRequestsApiState {
+        service: access_requests_service,
     });
 
     let token_service_data = web::Data::new(token_service.clone());
@@ -178,6 +197,7 @@ async fn main() -> std::io::Result<()> {
         openapi.merge(FilesystemApiDoc::openapi());
         openapi.merge(PermissionsApiDoc::openapi());
         openapi.merge(SharingApiDoc::openapi());
+        openapi.merge(AccessRequestsApiDoc::openapi());
         let config = SwaggerConfig::new(vec![
             "http://localhost:8881/api-docs/openapi.json",
             "http://localhost:8882/api-docs/openapi.json"
@@ -190,6 +210,7 @@ async fn main() -> std::io::Result<()> {
             .app_data(fs_state.clone())
             .app_data(permissions_state.clone())
             .app_data(sharing_state.clone())
+            .app_data(access_requests_state.clone())
             .app_data(token_service_data.clone())
             .wrap(Logger::default())
             .wrap(Cors::permissive())
@@ -199,7 +220,8 @@ async fn main() -> std::io::Result<()> {
                     .configure(storage::api::configure)
                     .configure(filesystem::api::configure)
                     .configure(permissions::api::configure)
-                    .configure(sharing::api::configure_drive),
+                    .configure(sharing::api::configure_drive)
+                    .configure(access_requests::api::configure),
             )
             .service(
                 web::scope("/api/v1")
@@ -208,7 +230,7 @@ async fn main() -> std::io::Result<()> {
             .service(
                 SwaggerUi::new("/swagger-ui/{_:.*}")
                     .url("/api-docs/openapi.json", openapi)
-                    .config(config.clone()), 
+                    .config(config.clone()),
             )
     })
     .bind(&bind_addr)?

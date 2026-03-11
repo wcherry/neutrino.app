@@ -89,12 +89,12 @@ A phased roadmap for building a Google Drive-competitive cloud storage and colla
 - [ ] Extend download/print/copy restriction to Editor role (admin-controlled)
 
 ### 2.4 Sharing UI
-- [ ] Share dialog: add people by email, set role
-- [ ] Show current collaborators and their roles in share dialog
-- [ ] "Shared with me" section in Drive home
-- [ ] Email notification to recipient on new share
-- [ ] Access request flow: recipient requests access, owner approves/denies
-- [ ] Owner receives push/email notification for access requests
+- [x] Share dialog: add people by email, set role
+- [x] Show current collaborators and their roles in share dialog
+- [x] "Shared with me" section in Drive home
+- [x] Email notification to recipient on new share
+- [x] Access request flow: recipient requests access, owner approves/denies
+- [x] Owner receives push/email notification for access requests
 
 ### 2.5 Domain Restrictions (Workspace)
 - [ ] Restrict shares to within an organization domain

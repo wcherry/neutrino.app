@@ -1,9 +1,10 @@
 use crate::auth::{
-    dto::{AuthResponse, LoginRequest, RefreshRequest, RegisterRequest, RegisterResponse, UserProfileResponse},
+    dto::{AuthResponse, LoginRequest, RefreshRequest, RegisterRequest, RegisterResponse, UserLookupResponse, UserProfileResponse},
     service::AuthService,
 };
 use crate::shared::{ApiError, AuthenticatedUser};
 use actix_web::{get, post, web};
+use serde::Deserialize;
 use std::sync::Arc;
 use utoipa::OpenApi;
 
@@ -94,20 +95,76 @@ pub async fn me(
     Ok(web::Json(profile))
 }
 
+#[derive(Deserialize)]
+pub struct LookupByEmailQuery {
+    pub email: String,
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/v1/auth/users/lookup",
+    params(("email" = String, Query, description = "Email address to look up")),
+    responses(
+        (status = 200, description = "User found", body = UserLookupResponse),
+        (status = 404, description = "User not found"),
+        (status = 401, description = "Not authenticated"),
+    ),
+    security(("bearer_auth" = [])),
+    tag = "auth"
+)]
+#[get("/users/lookup")]
+pub async fn lookup_user_by_email(
+    state: web::Data<AuthApiState>,
+    _user: AuthenticatedUser,
+    query: web::Query<LookupByEmailQuery>,
+) -> Result<web::Json<UserLookupResponse>, ApiError> {
+    match state.auth_service.lookup_user_by_email(&query.email)? {
+        Some(u) => Ok(web::Json(u)),
+        None => Err(ApiError::not_found("User not found")),
+    }
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/v1/auth/users/{user_id}",
+    params(("user_id" = String, Path, description = "User ID")),
+    responses(
+        (status = 200, description = "User found", body = UserLookupResponse),
+        (status = 404, description = "User not found"),
+        (status = 401, description = "Not authenticated"),
+    ),
+    security(("bearer_auth" = [])),
+    tag = "auth"
+)]
+#[get("/users/{user_id}")]
+pub async fn get_user_by_id(
+    state: web::Data<AuthApiState>,
+    _user: AuthenticatedUser,
+    path: web::Path<String>,
+) -> Result<web::Json<UserLookupResponse>, ApiError> {
+    let user_id = path.into_inner();
+    match state.auth_service.get_user_by_id(&user_id)? {
+        Some(u) => Ok(web::Json(u)),
+        None => Err(ApiError::not_found("User not found")),
+    }
+}
+
 pub fn configure(conf: &mut web::ServiceConfig) {
     conf.service(
         web::scope("/auth")
             .service(register)
             .service(login)
             .service(refresh)
-            .service(me),
+            .service(me)
+            .service(lookup_user_by_email)
+            .service(get_user_by_id),
     );
 }
 
 #[derive(OpenApi)]
 #[openapi(
-    paths(register, login, refresh, me),
-    components(schemas(RegisterRequest, LoginRequest, RefreshRequest, AuthResponse, RegisterResponse, UserProfileResponse)),
+    paths(register, login, refresh, me, lookup_user_by_email, get_user_by_id),
+    components(schemas(RegisterRequest, LoginRequest, RefreshRequest, AuthResponse, RegisterResponse, UserProfileResponse, UserLookupResponse)),
     tags((name = "auth", description = "Authentication endpoints"))
 )]
 pub struct AuthApiDoc;

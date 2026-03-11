@@ -1,5 +1,5 @@
 use crate::auth::{
-    dto::{AuthResponse, LoginRequest, RefreshRequest, RegisterRequest, RegisterResponse, UserProfileResponse},
+    dto::{AuthResponse, LoginRequest, RefreshRequest, RegisterRequest, RegisterResponse, UserLookupResponse, UserProfileResponse},
     repository::{AuthRepository, NewRefreshToken, NewUser},
     tokens::{hash_token, TokenService},
 };
@@ -160,5 +160,23 @@ impl AuthService {
             name: user.name,
             created_at: user.created_at,
         })
+    }
+
+    pub fn lookup_user_by_email(&self, email: &str) -> Result<Option<UserLookupResponse>, ApiError> {
+        let user = self.repo.find_user_by_email(email)?;
+        Ok(user.map(|u| UserLookupResponse {
+            id: u.id,
+            email: u.email,
+            name: u.name,
+        }))
+    }
+
+    pub fn get_user_by_id(&self, user_id: &str) -> Result<Option<UserLookupResponse>, ApiError> {
+        let user = self.repo.find_user_by_id(user_id)?;
+        Ok(user.map(|u| UserLookupResponse {
+            id: u.id,
+            email: u.email,
+            name: u.name,
+        }))
     }
 }

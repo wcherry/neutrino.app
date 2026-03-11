@@ -45,3 +45,12 @@ pub struct UserProfileResponse {
     pub name: String,
     pub created_at: chrono::NaiveDateTime,
 }
+
+/// Minimal user info returned by lookup endpoints.
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct UserLookupResponse {
+    pub id: String,
+    pub email: String,
+    pub name: String,
+}
