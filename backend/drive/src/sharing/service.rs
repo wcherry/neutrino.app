@@ -7,7 +7,7 @@ use crate::sharing::{
     model::{NewShareLinkRecord, UpdateShareLinkRecord},
     repository::SharingRepository,
 };
-use crate::shared::ApiError;
+use crate::common::ApiError;
 use chrono::{NaiveDateTime, Utc};
 use std::sync::Arc;
 use uuid::Uuid;

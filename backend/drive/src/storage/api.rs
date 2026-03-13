@@ -1,4 +1,4 @@
-use crate::shared::{
+use crate::common::{
     apply_list_query, ApiError, AuthenticatedUser, ListQuery, ListQueryParams, OrderDirection,
 };
 use crate::storage::{
@@ -44,7 +44,7 @@ pub async fn upload_file(
 
     while let Some(field) = payload.next().await {
         let mut field = field.map_err(|e| {
-            log::error!("Multipart error: {:?}", e);
+            tracing::error!("Multipart error: {:?}", e);
             ApiError::bad_request("Invalid multipart data")
         })?;
 
@@ -63,7 +63,7 @@ pub async fn upload_file(
                 let mut buf = Vec::new();
                 while let Some(chunk) = field.next().await {
                     let data = chunk.map_err(|e| {
-                        log::error!("Chunk read error: {:?}", e);
+                        tracing::error!("Chunk read error: {:?}", e);
                         ApiError::bad_request("Upload interrupted")
                     })?;
                     buf.extend_from_slice(&data);
@@ -104,7 +104,7 @@ pub async fn upload_file(
             .temp_path(&user.user_id, &temp_id);
 
         let raw_file = tokio::fs::File::create(&temp_path).await.map_err(|e| {
-            log::error!("Failed to create temp file: {:?}", e);
+            tracing::error!("Failed to create temp file: {:?}", e);
             ApiError::internal("Failed to initialize upload")
         })?;
         // Buffer writes to reduce backpressure on the network stream.
@@ -115,18 +115,18 @@ pub async fn upload_file(
         let mut size: i64 = 0;
         while let Some(chunk) = field.next().await {
             let data = chunk.map_err(|e| {
-                log::error!("Chunk read error: {:?}", e);
+                tracing::error!("Chunk read error: {:?}", e);
                 ApiError::bad_request("Upload interrupted")
             })?;
             size += data.len() as i64;
             file.write_all(&data).await.map_err(|e| {
-                log::error!("Write error: {:?}", e);
+                tracing::error!("Write error: {:?}", e);
                 ApiError::internal("Failed to write upload data")
             })?;
         }
 
         file.flush().await.map_err(|e| {
-            log::error!("Flush error: {:?}", e);
+            tracing::error!("Flush error: {:?}", e);
             ApiError::internal("Failed to finalize upload")
         })?;
         drop(file);
@@ -134,13 +134,13 @@ pub async fn upload_file(
         let response = state
             .storage_service
             .finalize_upload(
-                &user.user_id,
+                &user,
                 &temp_path,
                 &file_name,
                 &mime_type,
                 size,
                 folder_id.as_deref(),
-            )
+            ).await
             .inspect_err(|_| {
                 let _ = std::fs::remove_file(&temp_path);
             })?;
@@ -238,7 +238,7 @@ pub async fn download_file(
 
     let named_file = NamedFile::open(&file_path)
         .map_err(|e| {
-            log::error!("Failed to open file {:?}: {:?}", file_path, e);
+            tracing::error!("Failed to open file {:?}: {:?}", file_path, e);
             ApiError::internal("Failed to serve file")
         })?
         .set_content_type(content_type)
@@ -281,7 +281,7 @@ pub async fn preview_file(
 
     let named_file = NamedFile::open(&file_path)
         .map_err(|e| {
-            log::error!("Failed to open file {:?}: {:?}", file_path, e);
+            tracing::error!("Failed to open file {:?}: {:?}", file_path, e);
             ApiError::internal("Failed to serve file")
         })?
         .set_content_type(content_type)
@@ -322,7 +322,7 @@ pub async fn zip_contents(
 
     let entries = web::block(move || {
         let file = std::fs::File::open(&file_path).map_err(|e| {
-            log::error!("Failed to open ZIP file {:?}: {:?}", file_path, e);
+            tracing::error!("Failed to open ZIP file {:?}: {:?}", file_path, e);
             ApiError::internal("Failed to open file")
         })?;
         let mut archive = zip::ZipArchive::new(file)
@@ -400,7 +400,7 @@ pub async fn upload_version(
 
     while let Some(field) = payload.next().await {
         let mut field = field.map_err(|e| {
-            log::error!("Multipart error: {:?}", e);
+            tracing::error!("Multipart error: {:?}", e);
             ApiError::bad_request("Invalid multipart data")
         })?;
 
@@ -417,7 +417,7 @@ pub async fn upload_version(
             .temp_path(&user.user_id, &temp_id);
 
         let raw_file = tokio::fs::File::create(&temp_path).await.map_err(|e| {
-            log::error!("Failed to create temp file: {:?}", e);
+            tracing::error!("Failed to create temp file: {:?}", e);
             ApiError::internal("Failed to initialize upload")
         })?;
         let mut file = BufWriter::with_capacity(1 << 20, raw_file);
@@ -425,18 +425,18 @@ pub async fn upload_version(
         let mut size: i64 = 0;
         while let Some(chunk) = field.next().await {
             let data = chunk.map_err(|e| {
-                log::error!("Chunk read error: {:?}", e);
+                tracing::error!("Chunk read error: {:?}", e);
                 ApiError::bad_request("Upload interrupted")
             })?;
             size += data.len() as i64;
             file.write_all(&data).await.map_err(|e| {
-                log::error!("Write error: {:?}", e);
+                tracing::error!("Write error: {:?}", e);
                 ApiError::internal("Failed to write upload data")
             })?;
         }
 
         file.flush().await.map_err(|e| {
-            log::error!("Flush error: {:?}", e);
+            tracing::error!("Flush error: {:?}", e);
             ApiError::internal("Failed to finalize upload")
         })?;
         drop(file);

@@ -1,12 +1,14 @@
 use crate::sharing::{
     dto::{
         ResolvedShareLinkResponse, ShareLinkResponse, UpdateShareLinkRequest,
-        UpsertShareLinkRequest,
+        UpsertShareLinkRequest, LinkVisibility, LinkRole,
     },
     service::SharingService,
 };
-use crate::shared::{ApiError, AuthenticatedUser};
-use actix_web::{delete, get, patch, put, web, HttpResponse};
+use crate::common::{ApiError, AuthenticatedUser};
+use crate::storage::api::StorageApiState;
+use actix_files::NamedFile;
+use actix_web::{delete, get, patch, put, web, HttpRequest, HttpResponse};
 use std::sync::Arc;
 use utoipa::OpenApi;
 
@@ -35,15 +37,20 @@ pub async fn get_file_share_link(
     path: web::Path<String>,
 ) -> Result<HttpResponse, ApiError> {
     let file_id = path.into_inner();
-    match state
+    Ok(HttpResponse::Ok().json(match state
         .sharing_service
         .get_share_link(&user.user_id, "file", &file_id)?
     {
-        Some(link) => Ok(HttpResponse::Ok().json(link)),
-        None => Ok(HttpResponse::NotFound().json(serde_json::json!({
-            "error": { "code": "NOT_FOUND", "message": "No share link exists for this file" }
-        }))),
-    }
+        Some(link) => link,
+        // None => Ok(HttpResponse::NotFound().json(serde_json::json!({
+        //     "error": { "code": "NOT_FOUND", "message": "No share link exists for this file" }
+        // }))),
+        None => state.sharing_service.upsert_share_link(&user.user_id, "file", &file_id, 
+            UpsertShareLinkRequest{
+                visibility: LinkVisibility::AnyoneWithLink, 
+                role: LinkRole::Viewer, 
+                expires_at: None})?,
+    }))
 }
 
 #[utoipa::path(
@@ -269,6 +276,108 @@ pub async fn resolve_share_link(
     Ok(web::Json(resolved))
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/share/{token}/download",
+    params(("token" = String, Path, description = "Share link token")),
+    responses(
+        (status = 200, description = "File download"),
+        (status = 400, description = "Share link does not point to a file"),
+        (status = 404, description = "Share link not found or disabled"),
+        (status = 410, description = "Share link has expired"),
+    ),
+    tag = "sharing"
+)]
+#[get("/share/{token}/download")]
+pub async fn download_shared_file(
+    state: web::Data<SharingApiState>,
+    storage_state: web::Data<StorageApiState>,
+    path: web::Path<String>,
+    req: HttpRequest,
+) -> Result<HttpResponse, ApiError> {
+    let token = path.into_inner();
+    let resolved = state.sharing_service.resolve_token(&token)?;
+
+    if resolved.resource_type != "file" {
+        return Err(ApiError::bad_request("Share link does not reference a file"));
+    }
+
+    let (file_path, mime_type, file_name) = storage_state
+        .storage_service
+        .resolve_file_path_by_id(&resolved.resource_id)?;
+
+    let content_type: mime::Mime = mime_type
+        .parse()
+        .unwrap_or(mime::APPLICATION_OCTET_STREAM);
+
+    let disposition = actix_web::http::header::ContentDisposition {
+        disposition: actix_web::http::header::DispositionType::Attachment,
+        parameters: vec![actix_web::http::header::DispositionParam::Filename(
+            file_name,
+        )],
+    };
+
+    let named_file = NamedFile::open(&file_path)
+        .map_err(|e| {
+            tracing::error!("Failed to open file {:?}: {:?}", file_path, e);
+            ApiError::internal("Failed to serve file")
+        })?
+        .set_content_type(content_type)
+        .set_content_disposition(disposition);
+
+    Ok(named_file.into_response(&req))
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/v1/share/{token}/preview",
+    params(("token" = String, Path, description = "Share link token")),
+    responses(
+        (status = 200, description = "File preview served inline"),
+        (status = 400, description = "Share link does not point to a file"),
+        (status = 404, description = "Share link not found or disabled"),
+        (status = 410, description = "Share link has expired"),
+    ),
+    tag = "sharing"
+)]
+#[get("/share/{token}/preview")]
+pub async fn preview_shared_file(
+    state: web::Data<SharingApiState>,
+    storage_state: web::Data<StorageApiState>,
+    path: web::Path<String>,
+    req: HttpRequest,
+) -> Result<HttpResponse, ApiError> {
+    let token = path.into_inner();
+    let resolved = state.sharing_service.resolve_token(&token)?;
+
+    if resolved.resource_type != "file" {
+        return Err(ApiError::bad_request("Share link does not reference a file"));
+    }
+
+    let (file_path, mime_type, _) = storage_state
+        .storage_service
+        .resolve_file_path_by_id(&resolved.resource_id)?;
+
+    let content_type: mime::Mime = mime_type
+        .parse()
+        .unwrap_or(mime::APPLICATION_OCTET_STREAM);
+
+    let disposition = actix_web::http::header::ContentDisposition {
+        disposition: actix_web::http::header::DispositionType::Inline,
+        parameters: vec![],
+    };
+
+    let named_file = NamedFile::open(&file_path)
+        .map_err(|e| {
+            tracing::error!("Failed to open file {:?}: {:?}", file_path, e);
+            ApiError::internal("Failed to serve file")
+        })?
+        .set_content_type(content_type)
+        .set_content_disposition(disposition);
+
+    Ok(named_file.into_response(&req))
+}
+
 pub fn configure_drive(conf: &mut web::ServiceConfig) {
     conf.service(get_file_share_link)
         .service(upsert_file_share_link)
@@ -281,7 +390,9 @@ pub fn configure_drive(conf: &mut web::ServiceConfig) {
 }
 
 pub fn configure_public(conf: &mut web::ServiceConfig) {
-    conf.service(resolve_share_link);
+    conf.service(resolve_share_link)
+        .service(download_shared_file)
+        .service(preview_shared_file);
 }
 
 #[derive(OpenApi)]
@@ -296,6 +407,8 @@ pub fn configure_public(conf: &mut web::ServiceConfig) {
         update_folder_share_link,
         delete_folder_share_link,
         resolve_share_link,
+        download_shared_file,
+        preview_shared_file,
     ),
     components(schemas(
         ShareLinkResponse,

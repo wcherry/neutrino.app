@@ -1,4 +1,4 @@
-use crate::shared::ApiError;
+use crate::common::ApiError;
 use jsonwebtoken::{decode, DecodingKey, Validation};
 use serde::{Deserialize, Serialize};
 
@@ -27,7 +27,7 @@ impl TokenService {
         )
         .map(|data| data.claims)
         .map_err(|e| {
-            log::warn!("Token validation failed: {:?}", e);
+            tracing::warn!("Token validation failed: {:?}", e);
             ApiError::unauthorized("Invalid or expired token")
         })
     }

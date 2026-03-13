@@ -1,6 +1,6 @@
 use crate::schema::{files, folders, share_links};
 use crate::sharing::model::{NewShareLinkRecord, ShareLinkRecord, UpdateShareLinkRecord};
-use crate::shared::ApiError;
+use crate::common::ApiError;
 use diesel::prelude::*;
 use diesel::r2d2::{ConnectionManager, Pool};
 
@@ -19,7 +19,7 @@ impl SharingRepository {
         &self,
     ) -> Result<diesel::r2d2::PooledConnection<ConnectionManager<SqliteConnection>>, ApiError> {
         self.pool.get().map_err(|e| {
-            log::error!("DB pool error: {:?}", e);
+            tracing::error!("DB pool error: {:?}", e);
             ApiError::internal("Database connection unavailable")
         })
     }
@@ -38,7 +38,7 @@ impl SharingRepository {
         )
         .execute(&mut conn)
         .map_err(|e| {
-            log::error!("DB delete old share link error: {:?}", e);
+            tracing::error!("DB delete old share link error: {:?}", e);
             ApiError::internal("Database error")
         })?;
 
@@ -46,7 +46,7 @@ impl SharingRepository {
             .values(record)
             .execute(&mut conn)
             .map_err(|e| {
-                log::error!("DB insert share link error: {:?}", e);
+                tracing::error!("DB insert share link error: {:?}", e);
                 ApiError::internal("Database error")
             })?;
 
@@ -55,7 +55,7 @@ impl SharingRepository {
             .select(ShareLinkRecord::as_select())
             .first(&mut conn)
             .map_err(|e| {
-                log::error!("DB query share link after insert error: {:?}", e);
+                tracing::error!("DB query share link after insert error: {:?}", e);
                 ApiError::internal("Database error")
             })
     }
@@ -73,7 +73,7 @@ impl SharingRepository {
             .first(&mut conn)
             .optional()
             .map_err(|e| {
-                log::error!("DB find share link error: {:?}", e);
+                tracing::error!("DB find share link error: {:?}", e);
                 ApiError::internal("Database error")
             })
     }
@@ -86,7 +86,7 @@ impl SharingRepository {
             .first(&mut conn)
             .optional()
             .map_err(|e| {
-                log::error!("DB find share link by token error: {:?}", e);
+                tracing::error!("DB find share link by token error: {:?}", e);
                 ApiError::internal("Database error")
             })
     }
@@ -107,7 +107,7 @@ impl SharingRepository {
         .set(&changeset)
         .execute(&mut conn)
         .map_err(|e| {
-            log::error!("DB update share link error: {:?}", e);
+            tracing::error!("DB update share link error: {:?}", e);
             ApiError::internal("Database error")
         })?;
 
@@ -117,7 +117,7 @@ impl SharingRepository {
             .select(ShareLinkRecord::as_select())
             .first(&mut conn)
             .map_err(|e| {
-                log::error!("DB query share link after update error: {:?}", e);
+                tracing::error!("DB query share link after update error: {:?}", e);
                 ApiError::internal("Database error")
             })
     }
@@ -135,7 +135,7 @@ impl SharingRepository {
         )
         .execute(&mut conn)
         .map_err(|e| {
-            log::error!("DB delete share link error: {:?}", e);
+            tracing::error!("DB delete share link error: {:?}", e);
             ApiError::internal("Database error")
         })
     }
@@ -154,7 +154,7 @@ impl SharingRepository {
                 .first::<String>(&mut conn)
                 .optional()
                 .map_err(|e| {
-                    log::error!("DB get file name error: {:?}", e);
+                    tracing::error!("DB get file name error: {:?}", e);
                     ApiError::internal("Database error")
                 }),
             "folder" => folders::table
@@ -163,7 +163,7 @@ impl SharingRepository {
                 .first::<String>(&mut conn)
                 .optional()
                 .map_err(|e| {
-                    log::error!("DB get folder name error: {:?}", e);
+                    tracing::error!("DB get folder name error: {:?}", e);
                     ApiError::internal("Database error")
                 }),
             _ => Ok(None),

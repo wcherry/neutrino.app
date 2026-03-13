@@ -3,7 +3,7 @@ use crate::auth::{
     repository::{AuthRepository, NewRefreshToken, NewUser},
     tokens::{hash_token, TokenService},
 };
-use crate::shared::ApiError;
+use crate::common::ApiError;
 use argon2::{
     password_hash::{rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
     Argon2,
@@ -47,7 +47,7 @@ impl AuthService {
         let password_hash = argon2
             .hash_password(req.password.as_bytes(), &salt)
             .map_err(|e| {
-                log::error!("Password hashing error: {:?}", e);
+                tracing::error!("Password hashing error: {:?}", e);
                 ApiError::internal("Failed to hash password")
             })?
             .to_string();
@@ -76,7 +76,7 @@ impl AuthService {
             .ok_or_else(|| ApiError::unauthorized("Invalid email or password"))?;
 
         let parsed_hash = PasswordHash::new(&user.password_hash).map_err(|e| {
-            log::error!("Password hash parse error: {:?}", e);
+            tracing::error!("Password hash parse error: {:?}", e);
             ApiError::internal("Authentication error")
         })?;
 

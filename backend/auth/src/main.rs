@@ -3,7 +3,7 @@ use actix_cors::Cors;
 use diesel::r2d2::{ConnectionManager, Pool};
 use diesel::{RunQueryDsl, SqliteConnection};
 use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
-use log::{error, info};
+use tracing::{info, error};
 use serde_json::json;
 use std::sync::Arc;
 use utoipa::OpenApi;
@@ -12,7 +12,7 @@ use utoipa_swagger_ui::SwaggerUi;
 mod auth;
 mod config;
 mod schema;
-mod shared;
+mod common;
 
 use crate::config::Config;
 use crate::auth::{
@@ -21,6 +21,7 @@ use crate::auth::{
     service::AuthService,
     tokens::TokenService,
 };
+use shared::init_logging;
 
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
 
@@ -81,8 +82,7 @@ async fn main() -> std::io::Result<()> {
         std::process::exit(1);
     });
 
-    std::env::set_var("RUST_LOG", &config.log_level);
-    env_logger::init();
+    init_logging(&config.log_level, config.log_path);
 
     info!("Starting Neutrino Auth service");
     info!("Connecting to database: {}", config.database_url);

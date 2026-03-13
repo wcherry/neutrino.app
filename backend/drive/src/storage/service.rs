@@ -1,5 +1,5 @@
 use crate::permissions::service::PermissionsService;
-use crate::shared::{apply_list_query, ApiError, ListQuery, ListQueryParams, OrderDirection};
+use crate::common::{ApiError, AuthenticatedUser, ListQuery, ListQueryParams, OrderDirection, apply_list_query};
 use crate::storage::{
     dto::{
         FileMetadataResponse, FileOrderField, FileVersionResponse, ListFilesResponse,
@@ -38,16 +38,16 @@ impl StorageService {
     /// Called after a file has been streamed to `temp_path`.
     /// Enforces per-user quota and daily cap, then commits the upload.
     /// Automatically creates version 1 for the new file.
-    pub fn finalize_upload(
+    pub async fn finalize_upload(
         &self,
-        user_id: &str,
+        user: &AuthenticatedUser,
         temp_path: &Path,
         file_name: &str,
         mime_type: &str,
         size_bytes: i64,
         folder_id: Option<&str>,
     ) -> Result<FileMetadataResponse, ApiError> {
-        let quota = self.repo.get_or_create_quota(user_id)?;
+        let quota = self.repo.get_or_create_quota(&user.user_id)?;
 
         let now = Utc::now().naive_utc();
         let today = now.date();
@@ -70,17 +70,17 @@ impl StorageService {
         }
 
         let file_id = Uuid::new_v4().to_string();
-        let final_path = self.store.file_path(user_id, &file_id);
-        let storage_key = self.store.file_key(user_id, &file_id);
+        let final_path = self.store.file_path(&user.user_id, &file_id);
+        let storage_key = self.store.file_key(&user.user_id, &file_id);
 
         std::fs::rename(temp_path, &final_path).map_err(|e| {
-            log::error!("Failed to move temp file to final path: {:?}", e);
+            tracing::error!("Failed to move temp file to final path: {:?}", e);
             ApiError::internal("Failed to save uploaded file")
         })?;
 
         let new_file = NewFileRecord {
             id: &file_id,
-            user_id,
+            user_id: &user.user_id,
             name: file_name,
             size_bytes,
             mime_type,
@@ -92,23 +92,23 @@ impl StorageService {
             let _ = std::fs::remove_file(&final_path);
         })?;
 
-        if let Err(e) = self.permissions.grant_ownership(user_id, "file", &file_id) {
-            log::error!("Failed to grant ownership for file {}: {:?}", file_id, e);
+        if let Err(e) = self.permissions.grant_ownership(user, "file", &file_id).await {
+            tracing::error!("Failed to grant ownership for file {}: {:?}", file_id, e);
         }
 
         if let Err(e) = self.repo.update_quota_after_upload(
-            user_id,
+            &user.user_id,
             size_bytes,
             quota.used_bytes,
             quota.daily_upload_bytes,
             now,
             reset_daily,
         ) {
-            log::error!("Quota update failed for user {}: {:?}", user_id, e);
+            tracing::error!("Quota update failed for user {}: {:?}", &user.user_id, e);
         }
 
         // Create version 1 snapshot (best-effort; failure doesn't block upload)
-        self.create_version_snapshot(user_id, &file_id, &final_path, size_bytes, 1);
+        self.create_version_snapshot(&user.user_id, &file_id, &final_path, size_bytes, 1);
 
         Ok(FileMetadataResponse::from(file))
     }
@@ -137,7 +137,7 @@ impl StorageService {
         // Overwrite the main file with new content
         let main_path = self.store.file_path(user_id, file_id);
         std::fs::rename(temp_path, &main_path).map_err(|e| {
-            log::error!("Failed to move new version to main path: {:?}", e);
+            tracing::error!("Failed to move new version to main path: {:?}", e);
             ApiError::internal("Failed to save new version")
         })?;
 
@@ -246,7 +246,7 @@ impl StorageService {
 
         // Copy version snapshot content to the main file path
         std::fs::copy(self.store.resolve(&version.storage_path), &main_path).map_err(|e| {
-            log::error!(
+            tracing::error!(
                 "Failed to restore version {} to main path: {:?}",
                 version_id,
                 e
@@ -307,7 +307,7 @@ impl StorageService {
 
         let abs_path = self.store.resolve(&storage_key);
         if let Err(e) = std::fs::remove_file(&abs_path) {
-            log::warn!("Failed to remove version file {:?}: {:?}", abs_path, e);
+            tracing::warn!("Failed to remove version file {:?}: {:?}", abs_path, e);
         }
 
         Ok(())
@@ -357,6 +357,22 @@ impl StorageService {
         ))
     }
 
+    /// Resolve a file path without an authenticated user (public share link).
+    pub fn resolve_file_path_by_id(
+        &self,
+        file_id: &str,
+    ) -> Result<(std::path::PathBuf, String, String), ApiError> {
+        let file = self
+            .repo
+            .find_file_by_id(file_id)?
+            .ok_or_else(|| ApiError::not_found("File not found"))?;
+        Ok((
+            self.store.resolve(&file.storage_path),
+            file.mime_type,
+            file.name,
+        ))
+    }
+
     pub fn get_quota(&self, user_id: &str) -> Result<QuotaResponse, ApiError> {
         let quota = self.repo.get_or_create_quota(user_id)?;
         Ok(QuotaResponse {
@@ -390,7 +406,7 @@ impl StorageService {
             size_bytes,
             version_number,
         ) {
-            log::error!(
+            tracing::error!(
                 "Failed to create version {} snapshot for file {}: {:?}",
                 version_number,
                 file_id,
@@ -416,7 +432,7 @@ impl StorageService {
         let version_key = self.store.version_key(user_id, file_id, &version_id);
 
         std::fs::copy(source, &version_abs_path).map_err(|e| {
-            log::error!("Failed to copy file to version snapshot: {:?}", e);
+            tracing::error!("Failed to copy file to version snapshot: {:?}", e);
             ApiError::internal("Failed to create version snapshot")
         })?;
 

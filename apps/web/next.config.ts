@@ -13,6 +13,7 @@ const nextConfig: NextConfig = {
   experimental: {
     // Optimize CSS imports from workspace packages
   },
+  output: "export",
   images: {
     remotePatterns: [
       {

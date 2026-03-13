@@ -1,5 +1,5 @@
-use crate::shared::tokens::TokenService;
-use crate::shared::ApiError;
+use crate::auth::tokens::TokenService;
+use crate::common::ApiError;
 use actix_web::{web, FromRequest, HttpRequest};
 use std::future::{ready, Ready};
 use std::sync::Arc;

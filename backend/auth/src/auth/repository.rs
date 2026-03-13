@@ -1,4 +1,4 @@
-use crate::shared::ApiError;
+use crate::common::ApiError;
 use crate::schema::{refresh_tokens, users};
 use chrono::NaiveDateTime;
 use diesel::prelude::*;
@@ -59,7 +59,7 @@ impl AuthRepository {
 
     pub fn find_user_by_email(&self, email_val: &str) -> Result<Option<User>, ApiError> {
         let mut conn = self.pool.get().map_err(|e| {
-            log::error!("DB pool error: {:?}", e);
+            tracing::error!("DB pool error: {:?}", e);
             ApiError::internal("Database connection error")
         })?;
 
@@ -69,7 +69,7 @@ impl AuthRepository {
             .first(&mut conn)
             .optional()
             .map_err(|e| {
-                log::error!("DB query error: {:?}", e);
+                tracing::error!("DB query error: {:?}", e);
                 ApiError::internal("Database query error")
             })?;
 
@@ -78,7 +78,7 @@ impl AuthRepository {
 
     pub fn find_user_by_id(&self, user_id: &str) -> Result<Option<User>, ApiError> {
         let mut conn = self.pool.get().map_err(|e| {
-            log::error!("DB pool error: {:?}", e);
+            tracing::error!("DB pool error: {:?}", e);
             ApiError::internal("Database connection error")
         })?;
 
@@ -88,7 +88,7 @@ impl AuthRepository {
             .first(&mut conn)
             .optional()
             .map_err(|e| {
-                log::error!("DB query error: {:?}", e);
+                tracing::error!("DB query error: {:?}", e);
                 ApiError::internal("Database query error")
             })?;
 
@@ -97,7 +97,7 @@ impl AuthRepository {
 
     pub fn create_user(&self, new_user: NewUser) -> Result<User, ApiError> {
         let mut conn = self.pool.get().map_err(|e| {
-            log::error!("DB pool error: {:?}", e);
+            tracing::error!("DB pool error: {:?}", e);
             ApiError::internal("Database connection error")
         })?;
 
@@ -110,7 +110,7 @@ impl AuthRepository {
                     _,
                 ) => ApiError::conflict("Email already registered"),
                 _ => {
-                    log::error!("DB insert error: {:?}", e);
+                    tracing::error!("DB insert error: {:?}", e);
                     ApiError::internal("Database error")
                 }
             })?;
@@ -120,7 +120,7 @@ impl AuthRepository {
             .select(User::as_select())
             .first(&mut conn)
             .map_err(|e| {
-                log::error!("DB query error after insert: {:?}", e);
+                tracing::error!("DB query error after insert: {:?}", e);
                 ApiError::internal("Database error")
             })?;
 
@@ -132,7 +132,7 @@ impl AuthRepository {
         new_token: NewRefreshToken,
     ) -> Result<RefreshToken, ApiError> {
         let mut conn = self.pool.get().map_err(|e| {
-            log::error!("DB pool error: {:?}", e);
+            tracing::error!("DB pool error: {:?}", e);
             ApiError::internal("Database connection error")
         })?;
 
@@ -140,7 +140,7 @@ impl AuthRepository {
             .values(&new_token)
             .execute(&mut conn)
             .map_err(|e| {
-                log::error!("DB insert error: {:?}", e);
+                tracing::error!("DB insert error: {:?}", e);
                 ApiError::internal("Database error")
             })?;
 
@@ -149,7 +149,7 @@ impl AuthRepository {
             .select(RefreshToken::as_select())
             .first(&mut conn)
             .map_err(|e| {
-                log::error!("DB query error after insert: {:?}", e);
+                tracing::error!("DB query error after insert: {:?}", e);
                 ApiError::internal("Database error")
             })?;
 
@@ -161,7 +161,7 @@ impl AuthRepository {
         token_hash_val: &str,
     ) -> Result<Option<RefreshToken>, ApiError> {
         let mut conn = self.pool.get().map_err(|e| {
-            log::error!("DB pool error: {:?}", e);
+            tracing::error!("DB pool error: {:?}", e);
             ApiError::internal("Database connection error")
         })?;
 
@@ -171,7 +171,7 @@ impl AuthRepository {
             .first(&mut conn)
             .optional()
             .map_err(|e| {
-                log::error!("DB query error: {:?}", e);
+                tracing::error!("DB query error: {:?}", e);
                 ApiError::internal("Database query error")
             })?;
 
@@ -180,14 +180,14 @@ impl AuthRepository {
 
     pub fn delete_refresh_token(&self, token_id: &str) -> Result<(), ApiError> {
         let mut conn = self.pool.get().map_err(|e| {
-            log::error!("DB pool error: {:?}", e);
+            tracing::error!("DB pool error: {:?}", e);
             ApiError::internal("Database connection error")
         })?;
 
         diesel::delete(refresh_tokens::table.filter(refresh_tokens::id.eq(token_id)))
             .execute(&mut conn)
             .map_err(|e| {
-                log::error!("DB delete error: {:?}", e);
+                tracing::error!("DB delete error: {:?}", e);
                 ApiError::internal("Database error")
             })?;
 
@@ -197,14 +197,14 @@ impl AuthRepository {
     #[allow(dead_code)]
     pub fn check_db_health(&self) -> Result<(), ApiError> {
         let mut conn = self.pool.get().map_err(|e| {
-            log::error!("DB pool error: {:?}", e);
+            tracing::error!("DB pool error: {:?}", e);
             ApiError::internal("Database connection error")
         })?;
 
         diesel::sql_query("SELECT 1")
             .execute(&mut conn)
             .map_err(|e| {
-                log::error!("DB health check error: {:?}", e);
+                tracing::error!("DB health check error: {:?}", e);
                 ApiError::internal("Database health check failed")
             })?;
 

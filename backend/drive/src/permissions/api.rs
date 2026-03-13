@@ -5,7 +5,7 @@ use crate::permissions::{
     },
     service::PermissionsService,
 };
-use crate::shared::{ApiError, AuthenticatedUser};
+use crate::common::{ApiError, AuthenticatedUser};
 use actix_web::{delete, get, patch, post, web, HttpResponse};
 use serde::Deserialize;
 use std::sync::Arc;

@@ -21,6 +21,11 @@ export interface DrawerProps {
   children?: React.ReactNode;
 }
 
+type DrawerCSSVars = {
+  '--drawer-width'?: string;
+  '--drawer-height'?: string;
+};
+
 const VARIANTS = {
   left: drawerLeft,
   right: drawerRight,
@@ -59,9 +64,9 @@ export function Drawer({
 
   if (typeof window === 'undefined') return null;
 
-  const style: React.CSSProperties = {};
-  if (width) style['--drawer-width' as string] = typeof width === 'number' ? `${width}px` : width;
-  if (height) style['--drawer-height' as string] = typeof height === 'number' ? `${height}px` : height;
+  const style: React.CSSProperties & DrawerCSSVars = {};
+  if (width) style['--drawer-width'] = typeof width === 'number' ? `${width}px` : width;
+  if (height) style['--drawer-height'] = typeof height === 'number' ? `${height}px` : height;
 
   return createPortal(
     <AnimatePresence>

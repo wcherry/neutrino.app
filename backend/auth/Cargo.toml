@@ -17,11 +17,10 @@ rand_core = { version = "0.6", features = ["getrandom"] }
 uuid = { version = "1", features = ["v4"] }
 chrono = { version = "0.4", features = ["serde"] }
 tokio = { version = "1", features = ["full"] }
-env_logger = "0.11"
-log = "0.4"
 dotenvy = "0.15"
 utoipa = { version = "4", features = ["actix_extras"] }
 utoipa-swagger-ui = { version = "6", features = ["actix-web"] }
 thiserror = "1"
 libsqlite3-sys = { version = "0.27", features = ["bundled"] }
 hex = "0.4"
+tracing = "0.1.44"

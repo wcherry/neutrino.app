@@ -1,5 +1,5 @@
-use crate::auth::tokens::TokenService;
-use crate::shared::ApiError;
+use crate::common::tokens::TokenService;
+use crate::common::ApiError;
 use actix_web::{web, FromRequest, HttpRequest};
 use std::future::{ready, Ready};
 use std::sync::Arc;
@@ -8,6 +8,7 @@ use std::sync::Arc;
 pub struct AuthenticatedUser {
     pub user_id: String,
     pub email: String,
+    pub token: String,
 }
 
 impl FromRequest for AuthenticatedUser {
@@ -41,5 +42,6 @@ fn extract_user(req: &HttpRequest) -> Result<AuthenticatedUser, ApiError> {
     Ok(AuthenticatedUser {
         user_id: claims.sub,
         email: claims.email,
+        token: token.to_string(),
     })
 }

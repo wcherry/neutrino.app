@@ -1,6 +1,6 @@
 use crate::permissions::model::{NewPermissionRecord, PermissionRecord};
 use crate::schema::{files, folders, permissions};
-use crate::shared::ApiError;
+use crate::common::ApiError;
 use diesel::prelude::*;
 use diesel::r2d2::{ConnectionManager, Pool};
 
@@ -19,7 +19,7 @@ impl PermissionsRepository {
         &self,
     ) -> Result<diesel::r2d2::PooledConnection<ConnectionManager<SqliteConnection>>, ApiError> {
         self.pool.get().map_err(|e| {
-            log::error!("DB pool error: {:?}", e);
+            tracing::error!("DB pool error: {:?}", e);
             ApiError::internal("Database connection unavailable")
         })
     }
@@ -40,7 +40,7 @@ impl PermissionsRepository {
         )
         .execute(&mut conn)
         .map_err(|e| {
-            log::error!("DB delete old permission error: {:?}", e);
+            tracing::error!("DB delete old permission error: {:?}", e);
             ApiError::internal("Database error")
         })?;
 
@@ -48,7 +48,7 @@ impl PermissionsRepository {
             .values(record)
             .execute(&mut conn)
             .map_err(|e| {
-                log::error!("DB insert permission error: {:?}", e);
+                tracing::error!("DB insert permission error: {:?}", e);
                 ApiError::internal("Database error")
             })?;
 
@@ -57,7 +57,7 @@ impl PermissionsRepository {
             .select(PermissionRecord::as_select())
             .first(&mut conn)
             .map_err(|e| {
-                log::error!("DB query permission after insert error: {:?}", e);
+                tracing::error!("DB query permission after insert error: {:?}", e);
                 ApiError::internal("Database error")
             })
     }
@@ -77,7 +77,7 @@ impl PermissionsRepository {
             .first(&mut conn)
             .optional()
             .map_err(|e| {
-                log::error!("DB find permission error: {:?}", e);
+                tracing::error!("DB find permission error: {:?}", e);
                 ApiError::internal("Database error")
             })
     }
@@ -94,7 +94,7 @@ impl PermissionsRepository {
             .select(PermissionRecord::as_select())
             .load(&mut conn)
             .map_err(|e| {
-                log::error!("DB list permissions error: {:?}", e);
+                tracing::error!("DB list permissions error: {:?}", e);
                 ApiError::internal("Database error")
             })
     }
@@ -116,7 +116,7 @@ impl PermissionsRepository {
         .set(permissions::role.eq(role))
         .execute(&mut conn)
         .map_err(|e| {
-            log::error!("DB update permission role error: {:?}", e);
+            tracing::error!("DB update permission role error: {:?}", e);
             ApiError::internal("Database error")
         })
     }
@@ -136,7 +136,7 @@ impl PermissionsRepository {
         )
         .execute(&mut conn)
         .map_err(|e| {
-            log::error!("DB delete permission error: {:?}", e);
+            tracing::error!("DB delete permission error: {:?}", e);
             ApiError::internal("Database error")
         })
     }
@@ -150,7 +150,7 @@ impl PermissionsRepository {
             .count()
             .get_result(&mut conn)
             .map_err(|e| {
-                log::error!("DB count owners error: {:?}", e);
+                tracing::error!("DB count owners error: {:?}", e);
                 ApiError::internal("Database error")
             })
     }
@@ -165,7 +165,7 @@ impl PermissionsRepository {
             .optional()
             .map(|opt| opt.flatten())
             .map_err(|e| {
-                log::error!("DB get file folder_id error: {:?}", e);
+                tracing::error!("DB get file folder_id error: {:?}", e);
                 ApiError::internal("Database error")
             })
     }
@@ -180,7 +180,7 @@ impl PermissionsRepository {
             .optional()
             .map(|opt| opt.flatten())
             .map_err(|e| {
-                log::error!("DB get folder parent_id error: {:?}", e);
+                tracing::error!("DB get folder parent_id error: {:?}", e);
                 ApiError::internal("Database error")
             })
     }
@@ -199,7 +199,7 @@ impl PermissionsRepository {
             .select(permissions::resource_id)
             .load::<String>(&mut conn)
             .map_err(|e| {
-                log::error!("DB list owned resource IDs error: {:?}", e);
+                tracing::error!("DB list owned resource IDs error: {:?}", e);
                 ApiError::internal("Database error")
             })
     }
@@ -217,7 +217,7 @@ impl PermissionsRepository {
             .select(crate::permissions::model::PermissionRecord::as_select())
             .load(&mut conn)
             .map_err(|e| {
-                log::error!("DB list shared with user error: {:?}", e);
+                tracing::error!("DB list shared with user error: {:?}", e);
                 ApiError::internal("Database error")
             })
     }

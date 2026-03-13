@@ -5,7 +5,7 @@ use crate::access_requests::{
     },
     service::AccessRequestsService,
 };
-use crate::shared::{ApiError, AuthenticatedUser};
+use crate::common::{ApiError, AuthenticatedUser};
 use actix_web::{get, post, web, HttpResponse};
 use std::sync::Arc;
 use utoipa::OpenApi;

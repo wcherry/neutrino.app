@@ -1,4 +1,4 @@
-use crate::shared::{ApiError, ListQuery, OrderDirection};
+use crate::common::{ApiError, ListQuery, OrderDirection};
 use crate::storage::model::{
     FileRecord, FileVersionRecord, NewFileRecord, NewFileVersionRecord, NewUserQuota,
     UpdateFileContent, UserQuota,
@@ -27,7 +27,7 @@ impl StorageRepository {
             .values(&new_file)
             .execute(&mut conn)
             .map_err(|e| {
-                log::error!("DB insert file error: {:?}", e);
+                tracing::error!("DB insert file error: {:?}", e);
                 ApiError::internal("Database error")
             })?;
 
@@ -36,7 +36,7 @@ impl StorageRepository {
             .select(FileRecord::as_select())
             .first(&mut conn)
             .map_err(|e| {
-                log::error!("DB query after insert error: {:?}", e);
+                tracing::error!("DB query after insert error: {:?}", e);
                 ApiError::internal("Database error")
             })
     }
@@ -74,7 +74,7 @@ impl StorageRepository {
         };
 
         result.map_err(|e| {
-            log::error!("DB list files error: {:?}", e);
+            tracing::error!("DB list files error: {:?}", e);
             ApiError::internal("Database error")
         })
     }
@@ -93,7 +93,21 @@ impl StorageRepository {
             .first(&mut conn)
             .optional()
             .map_err(|e| {
-                log::error!("DB find file error: {:?}", e);
+                tracing::error!("DB find file error: {:?}", e);
+                ApiError::internal("Database error")
+            })
+    }
+
+    pub fn find_file_by_id(&self, file_id: &str) -> Result<Option<FileRecord>, ApiError> {
+        let mut conn = self.get_conn()?;
+
+        files::table
+            .filter(files::id.eq(file_id))
+            .select(FileRecord::as_select())
+            .first(&mut conn)
+            .optional()
+            .map_err(|e| {
+                tracing::error!("DB find file by id error: {:?}", e);
                 ApiError::internal("Database error")
             })
     }
@@ -107,7 +121,7 @@ impl StorageRepository {
             .first(&mut conn)
             .optional()
             .map_err(|e| {
-                log::error!("DB get quota error: {:?}", e);
+                tracing::error!("DB get quota error: {:?}", e);
                 ApiError::internal("Database error")
             })?;
 
@@ -119,7 +133,7 @@ impl StorageRepository {
             .values(NewUserQuota { user_id })
             .execute(&mut conn)
             .map_err(|e| {
-                log::error!("DB create quota error: {:?}", e);
+                tracing::error!("DB create quota error: {:?}", e);
                 ApiError::internal("Database error")
             })?;
 
@@ -128,7 +142,7 @@ impl StorageRepository {
             .select(UserQuota::as_select())
             .first(&mut conn)
             .map_err(|e| {
-                log::error!("DB get quota after create error: {:?}", e);
+                tracing::error!("DB get quota after create error: {:?}", e);
                 ApiError::internal("Database error")
             })
     }
@@ -154,7 +168,7 @@ impl StorageRepository {
             ))
             .execute(&mut conn)
             .map_err(|e| {
-                log::error!("DB update quota error: {:?}", e);
+                tracing::error!("DB update quota error: {:?}", e);
                 ApiError::internal("Database error")
             })?;
 
@@ -177,7 +191,7 @@ impl StorageRepository {
         .set(&changeset)
         .execute(&mut conn)
         .map_err(|e| {
-            log::error!("DB update file content error: {:?}", e);
+            tracing::error!("DB update file content error: {:?}", e);
             ApiError::internal("Database error")
         })?;
 
@@ -186,7 +200,7 @@ impl StorageRepository {
             .select(FileRecord::as_select())
             .first(&mut conn)
             .map_err(|e| {
-                log::error!("DB fetch updated file error: {:?}", e);
+                tracing::error!("DB fetch updated file error: {:?}", e);
                 ApiError::internal("Database error")
             })
     }
@@ -203,7 +217,7 @@ impl StorageRepository {
             .values(&new_version)
             .execute(&mut conn)
             .map_err(|e| {
-                log::error!("DB insert version error: {:?}", e);
+                tracing::error!("DB insert version error: {:?}", e);
                 ApiError::internal("Database error")
             })?;
 
@@ -212,7 +226,7 @@ impl StorageRepository {
             .select(FileVersionRecord::as_select())
             .first(&mut conn)
             .map_err(|e| {
-                log::error!("DB query after version insert error: {:?}", e);
+                tracing::error!("DB query after version insert error: {:?}", e);
                 ApiError::internal("Database error")
             })
     }
@@ -226,7 +240,7 @@ impl StorageRepository {
             .order(file_versions::version_number.desc())
             .load(&mut conn)
             .map_err(|e| {
-                log::error!("DB list versions error: {:?}", e);
+                tracing::error!("DB list versions error: {:?}", e);
                 ApiError::internal("Database error")
             })
     }
@@ -247,7 +261,7 @@ impl StorageRepository {
             .first(&mut conn)
             .optional()
             .map_err(|e| {
-                log::error!("DB find version error: {:?}", e);
+                tracing::error!("DB find version error: {:?}", e);
                 ApiError::internal("Database error")
             })
     }
@@ -260,7 +274,7 @@ impl StorageRepository {
             .count()
             .get_result(&mut conn)
             .map_err(|e| {
-                log::error!("DB count versions error: {:?}", e);
+                tracing::error!("DB count versions error: {:?}", e);
                 ApiError::internal("Database error")
             })
     }
@@ -275,7 +289,7 @@ impl StorageRepository {
             .first::<Option<i32>>(&mut conn)
             .map(|v| v.unwrap_or(0))
             .map_err(|e| {
-                log::error!("DB max version number error: {:?}", e);
+                tracing::error!("DB max version number error: {:?}", e);
                 ApiError::internal("Database error")
             })
     }
@@ -298,7 +312,7 @@ impl StorageRepository {
         .set(file_versions::label.eq(&label))
         .execute(&mut conn)
         .map_err(|e| {
-            log::error!("DB update version label error: {:?}", e);
+            tracing::error!("DB update version label error: {:?}", e);
             ApiError::internal("Database error")
         })?;
 
@@ -307,7 +321,7 @@ impl StorageRepository {
             .select(FileVersionRecord::as_select())
             .first(&mut conn)
             .map_err(|e| {
-                log::error!("DB fetch updated version error: {:?}", e);
+                tracing::error!("DB fetch updated version error: {:?}", e);
                 ApiError::internal("Database error")
             })
     }
@@ -328,7 +342,7 @@ impl StorageRepository {
             .first(&mut conn)
             .optional()
             .map_err(|e| {
-                log::error!("DB find version for delete error: {:?}", e);
+                tracing::error!("DB find version for delete error: {:?}", e);
                 ApiError::internal("Database error")
             })?;
 
@@ -339,7 +353,7 @@ impl StorageRepository {
         diesel::delete(file_versions::table.filter(file_versions::id.eq(version_id)))
             .execute(&mut conn)
             .map_err(|e| {
-                log::error!("DB delete version error: {:?}", e);
+                tracing::error!("DB delete version error: {:?}", e);
                 ApiError::internal("Database error")
             })?;
 
@@ -357,7 +371,7 @@ impl StorageRepository {
             .first(&mut conn)
             .optional()
             .map_err(|e| {
-                log::error!("DB find oldest version error: {:?}", e);
+                tracing::error!("DB find oldest version error: {:?}", e);
                 ApiError::internal("Database error")
             })?;
 
@@ -368,7 +382,7 @@ impl StorageRepository {
         diesel::delete(file_versions::table.filter(file_versions::id.eq(&version.id)))
             .execute(&mut conn)
             .map_err(|e| {
-                log::error!("DB delete oldest version error: {:?}", e);
+                tracing::error!("DB delete oldest version error: {:?}", e);
                 ApiError::internal("Database error")
             })?;
 
@@ -380,7 +394,7 @@ impl StorageRepository {
     ) -> Result<diesel::r2d2::PooledConnection<ConnectionManager<SqliteConnection>>, ApiError>
     {
         self.pool.get().map_err(|e| {
-            log::error!("DB pool error: {:?}", e);
+            tracing::error!("DB pool error: {:?}", e);
             ApiError::internal("Database connection error")
         })
     }

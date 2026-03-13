@@ -1,4 +1,4 @@
-use log::info;
+use tracing::info;
 
 #[tokio::main]
 async fn main() {

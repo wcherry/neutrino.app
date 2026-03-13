@@ -1,12 +1,12 @@
-use crate::permissions::{
+use crate::{permissions::{
     dto::{
         GrantPermissionRequest, ListPermissionsResponse, PermissionResponse, Role,
         TransferOwnershipRequest, UpdatePermissionRequest,
     },
     model::NewPermissionRecord,
     repository::PermissionsRepository,
-};
-use crate::shared::ApiError;
+}, common::{AuthenticatedUser, fetch_auth_profile}};
+use crate::common::ApiError;
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -21,22 +21,26 @@ impl PermissionsService {
 
     /// Auto-grants Owner role when a resource is created. Called internally by
     /// FilesystemService and StorageService.
-    pub fn grant_ownership(
+    pub async fn grant_ownership(
         &self,
-        user_id: &str,
+        user: &AuthenticatedUser,
         resource_type: &str,
         resource_id: &str,
     ) -> Result<(), ApiError> {
+        let profile = fetch_auth_profile(&user).await?;
+        let user_email = profile.email.as_ref();
+        let user_name = profile.name.as_ref();
+
         let id = Uuid::new_v4().to_string();
         let record = NewPermissionRecord {
             id: &id,
             resource_type,
             resource_id,
-            user_id,
+            user_id: &user.user_id,
             role: "owner",
-            granted_by: user_id,
-            user_email: "",
-            user_name: "",
+            granted_by: &user.user_id,
+            user_email,
+            user_name,
         };
         self.repo.upsert_permission(&record)?;
         Ok(())
@@ -82,7 +86,7 @@ impl PermissionsService {
                 "Cannot grant Owner role directly. Use transfer-ownership instead.",
             ));
         }
-        log::info!(
+        tracing::info!(
             "Sharing notification: granting {} role on {} {} to {} ({})",
             req.role.as_str(), resource_type, resource_id, req.user_email, req.user_id
         );

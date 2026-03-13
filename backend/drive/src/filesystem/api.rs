@@ -9,11 +9,11 @@ use crate::filesystem::{
     service::FilesystemService,
 };
 use crate::permissions::repository::PermissionsRepository;
-use crate::shared::{ApiError, AuthenticatedUser, ListQueryParams};
+use crate::common::{ApiError, AuthenticatedUser, ListQueryParams};
 use actix_web::{delete, get, patch, post, web, HttpResponse};
 use serde::Serialize;
 use std::sync::Arc;
-use log::info;
+use tracing::info;
 use utoipa::OpenApi;
 
 pub struct FilesystemApiState {
@@ -43,7 +43,7 @@ pub async fn create_folder(
 ) -> Result<HttpResponse, ApiError> {
     let folder = state
         .filesystem_service
-        .create_folder(&user.user_id, body.into_inner())?;
+        .create_folder(&user, body.into_inner()).await?;
     Ok(HttpResponse::Created().json(folder))
 }
 

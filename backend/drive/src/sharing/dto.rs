@@ -72,6 +72,26 @@ pub struct ShareLinkResponse {
     pub updated_at: String,
 }
 
+impl ShareLinkResponse {
+    pub fn empty() -> Self {
+        let emstring = "".to_string();
+        Self {
+            id: emstring.clone(),
+            resource_type: emstring.clone(),
+            resource_id: emstring.clone(),
+            token: emstring.clone(),
+            visibility: emstring.clone(),
+            role: emstring.clone(),
+            expires_at: None,
+            is_active: false,
+            created_by: emstring.clone(),
+            created_at: emstring.clone(),
+            updated_at: emstring.clone(),
+        }
+    }
+    
+}
+
 impl From<ShareLinkRecord> for ShareLinkResponse {
     fn from(r: ShareLinkRecord) -> Self {
         ShareLinkResponse {

@@ -1,4 +1,4 @@
-use crate::filesystem::{
+use crate::{filesystem::{
     dto::{
         BulkMoveRequest, BulkResult, BulkTrashRequest, CreateFolderRequest, CreateShortcutRequest,
         FileResponse, FolderContentsOrderField, FolderContentsResponse, FolderResponse,
@@ -7,9 +7,9 @@ use crate::filesystem::{
     },
     model::{NewFolderRecord, NewShortcutRecord, UpdateFolderRecord},
     repository::FilesystemRepository,
-};
+}, common::AuthenticatedUser};
 use crate::permissions::service::PermissionsService;
-use crate::shared::{apply_list_query, ApiError, ListQueryParams, OrderDirection};
+use crate::common::{apply_list_query, ApiError, ListQueryParams, OrderDirection};
 use crate::storage::store::LocalFileStore;
 use chrono::{Duration, Utc};
 use std::sync::Arc;
@@ -36,9 +36,9 @@ impl FilesystemService {
 
     // ── Folder operations ─────────────────────────────────────────────────────
 
-    pub fn create_folder(
+    pub async fn create_folder(
         &self,
-        user_id: &str,
+        user: &AuthenticatedUser,
         req: CreateFolderRequest,
     ) -> Result<FolderResponse, ApiError> {
         let name = req.name.trim().to_string();
@@ -49,15 +49,15 @@ impl FilesystemService {
         let id = Uuid::new_v4().to_string();
         let record = NewFolderRecord {
             id: &id,
-            user_id,
+            user_id: &user.user_id,
             parent_id: req.parent_id.as_deref(),
             name: &name,
         };
 
         let folder = self.repo.create_folder(record)?;
 
-        if let Err(e) = self.permissions.grant_ownership(user_id, "folder", &id) {
-            log::error!("Failed to grant ownership for folder {}: {:?}", id, e);
+        if let Err(e) = self.permissions.grant_ownership(user, "folder", &id).await {
+            tracing::error!("Failed to grant ownership for folder {}: {:?}", id, e);
         }
 
         Ok(FolderResponse::from(folder))
@@ -277,23 +277,23 @@ impl FilesystemService {
         for file in &files {
             let abs_path = self.store.resolve(&file.storage_path);
             let data = std::fs::read(&abs_path).map_err(|e| {
-                log::error!("Failed to read file {:?} for zip: {:?}", abs_path, e);
+                tracing::error!("Failed to read file {:?} for zip: {:?}", abs_path, e);
                 ApiError::internal("Failed to read file for download")
             })?;
 
             zip.start_file(&file.name, options).map_err(|e| {
-                log::error!("Zip start_file error: {:?}", e);
+                tracing::error!("Zip start_file error: {:?}", e);
                 ApiError::internal("Failed to create zip archive")
             })?;
 
             zip.write_all(&data).map_err(|e| {
-                log::error!("Zip write error: {:?}", e);
+                tracing::error!("Zip write error: {:?}", e);
                 ApiError::internal("Failed to write to zip archive")
             })?;
         }
 
         let cursor = zip.finish().map_err(|e| {
-            log::error!("Zip finish error: {:?}", e);
+            tracing::error!("Zip finish error: {:?}", e);
             ApiError::internal("Failed to finalize zip archive")
         })?;
 
@@ -366,7 +366,7 @@ impl FilesystemService {
         if let Some(file) = self.repo.permanently_delete_file(file_id, user_id)? {
             let abs_path = self.store.resolve(&file.storage_path);
             if let Err(e) = std::fs::remove_file(&abs_path) {
-                log::warn!("Failed to remove file from disk {:?}: {:?}", abs_path, e);
+                tracing::warn!("Failed to remove file from disk {:?}: {:?}", abs_path, e);
             }
         } else {
             return Err(ApiError::not_found("File not found in trash"));
@@ -393,7 +393,7 @@ impl FilesystemService {
         for file in deleted_files {
             let abs_path = self.store.resolve(&file.storage_path);
             if let Err(e) = std::fs::remove_file(&abs_path) {
-                log::warn!(
+                tracing::warn!(
                     "Failed to remove trashed file from disk {:?}: {:?}",
                     abs_path,
                     e
@@ -413,7 +413,7 @@ impl FilesystemService {
         for file in deleted_files {
             let abs_path = self.store.resolve(&file.storage_path);
             if let Err(e) = std::fs::remove_file(&abs_path) {
-                log::warn!(
+                tracing::warn!(
                     "Failed to remove expired trashed file from disk {:?}: {:?}",
                     abs_path,
                     e

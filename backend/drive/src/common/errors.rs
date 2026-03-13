@@ -80,7 +80,7 @@ impl From<diesel::result::Error> for ApiError {
         match e {
             diesel::result::Error::NotFound => ApiError::not_found("Resource not found"),
             _ => {
-                log::error!("Database error: {:?}", e);
+                tracing::error!("Database error: {:?}", e);
                 ApiError::internal("Database error")
             }
         }

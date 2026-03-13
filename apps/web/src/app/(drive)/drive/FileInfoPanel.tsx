@@ -87,7 +87,7 @@ export function FileInfoPanel({ file, onClose }: Props) {
         <div className={styles.fileIcon} style={{ color: getIconColor(file.mimeType) }}>
           <IconComponent size={48} strokeWidth={1} />
         </div>
-        <Text weight="medium" size="sm" truncate style={{ textAlign: 'center', maxWidth: '100%' }}>
+        <Text weight="medium" size="sm" truncate >
           {file.name}
         </Text>
       </div>
@@ -97,7 +97,6 @@ export function FileInfoPanel({ file, onClose }: Props) {
           size="xs"
           color="muted"
           weight="semibold"
-          style={{ textTransform: 'uppercase', letterSpacing: '0.06em' }}
         >
           Details
         </Text>
@@ -151,11 +150,10 @@ export function FileInfoPanel({ file, onClose }: Props) {
           size="xs"
           color="muted"
           weight="semibold"
-          style={{ textTransform: 'uppercase', letterSpacing: '0.06em' }}
         >
           MIME type
         </Text>
-        <Text size="xs" color="muted" style={{ wordBreak: 'break-all' }}>
+        <Text size="xs" color="muted">
           {file.mimeType}
         </Text>
       </div>

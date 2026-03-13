@@ -1,6 +1,6 @@
 use crate::access_requests::model::{AccessRequestRecord, NewAccessRequestRecord};
 use crate::schema::access_requests;
-use crate::shared::ApiError;
+use crate::common::ApiError;
 use diesel::prelude::*;
 use diesel::r2d2::{ConnectionManager, Pool};
 
@@ -19,7 +19,7 @@ impl AccessRequestsRepository {
         &self,
     ) -> Result<diesel::r2d2::PooledConnection<ConnectionManager<SqliteConnection>>, ApiError> {
         self.pool.get().map_err(|e| {
-            log::error!("DB pool error: {:?}", e);
+            tracing::error!("DB pool error: {:?}", e);
             ApiError::internal("Database connection unavailable")
         })
     }
@@ -33,7 +33,7 @@ impl AccessRequestsRepository {
             .values(record)
             .execute(&mut conn)
             .map_err(|e| {
-                log::error!("DB insert access request error: {:?}", e);
+                tracing::error!("DB insert access request error: {:?}", e);
                 ApiError::internal("Database error")
             })?;
         access_requests::table
@@ -41,7 +41,7 @@ impl AccessRequestsRepository {
             .select(AccessRequestRecord::as_select())
             .first(&mut conn)
             .map_err(|e| {
-                log::error!("DB query access request after insert error: {:?}", e);
+                tracing::error!("DB query access request after insert error: {:?}", e);
                 ApiError::internal("Database error")
             })
     }
@@ -54,7 +54,7 @@ impl AccessRequestsRepository {
             .first(&mut conn)
             .optional()
             .map_err(|e| {
-                log::error!("DB find access request error: {:?}", e);
+                tracing::error!("DB find access request error: {:?}", e);
                 ApiError::internal("Database error")
             })
     }
@@ -73,7 +73,7 @@ impl AccessRequestsRepository {
             .select(AccessRequestRecord::as_select())
             .load(&mut conn)
             .map_err(|e| {
-                log::error!("DB list access requests error: {:?}", e);
+                tracing::error!("DB list access requests error: {:?}", e);
                 ApiError::internal("Database error")
             })
     }
@@ -92,7 +92,7 @@ impl AccessRequestsRepository {
             .select(AccessRequestRecord::as_select())
             .load(&mut conn)
             .map_err(|e| {
-                log::error!("DB list pending access requests error: {:?}", e);
+                tracing::error!("DB list pending access requests error: {:?}", e);
                 ApiError::internal("Database error")
             })
     }
@@ -110,7 +110,7 @@ impl AccessRequestsRepository {
             ))
             .execute(&mut conn)
             .map_err(|e| {
-                log::error!("DB update access request status error: {:?}", e);
+                tracing::error!("DB update access request status error: {:?}", e);
                 ApiError::internal("Database error")
             })
     }
@@ -132,7 +132,7 @@ impl AccessRequestsRepository {
             .first(&mut conn)
             .optional()
             .map_err(|e| {
-                log::error!("DB find pending access request error: {:?}", e);
+                tracing::error!("DB find pending access request error: {:?}", e);
                 ApiError::internal("Database error")
             })
     }

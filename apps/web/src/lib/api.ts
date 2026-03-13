@@ -216,6 +216,12 @@ class ApiClientError extends Error {
   }
 }
 
+const AUTH_LOGIN_PATH = '/api/v1/auth/login';
+const AUTH_REGISTER_PATH = '/api/v1/auth/register';
+const AUTH_REFRESH_PATH = '/api/v1/auth/refresh';
+const LOGIN_REDIRECT_PATH = '/sign-in';
+let refreshInFlight: Promise<AuthTokens | null> | null = null;
+
 function getAuthHeader(): Record<string, string> {
   if (typeof window === 'undefined') return {};
   const token = localStorage.getItem('access_token');
@@ -223,25 +229,88 @@ function getAuthHeader(): Record<string, string> {
   return { Authorization: `Bearer ${token}` };
 }
 
+function shouldSkipRefresh(path: string): boolean {
+  return (
+    path.startsWith(AUTH_LOGIN_PATH) ||
+    path.startsWith(AUTH_REGISTER_PATH) ||
+    path.startsWith(AUTH_REFRESH_PATH)
+  );
+}
+
+function clearAuthAndRedirect(): void {
+  if (typeof window === 'undefined') return;
+  localStorage.removeItem('access_token');
+  localStorage.removeItem('refresh_token');
+  if (window.location.pathname !== LOGIN_REDIRECT_PATH) {
+    window.location.assign(LOGIN_REDIRECT_PATH);
+  }
+}
+
+async function refreshTokens(refreshToken?: string): Promise<AuthTokens | null> {
+  if (typeof window === 'undefined') return null;
+  const token = refreshToken ?? localStorage.getItem('refresh_token');
+  if (!token || token === 'undefined' || token === 'null') return null;
+
+  try {
+    const res = await fetch(`${BASE_URL}${AUTH_REFRESH_PATH}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refreshToken: token } satisfies RefreshRequest),
+    });
+
+    if (!res.ok) return null;
+    const tokens = (await res.json()) as AuthTokens;
+    localStorage.setItem('access_token', tokens.accessToken);
+    localStorage.setItem('refresh_token', tokens.refreshToken);
+    return tokens;
+  } catch {
+    return null;
+  }
+}
+
+async function refreshTokensOnce(): Promise<AuthTokens | null> {
+  if (refreshInFlight) return refreshInFlight;
+  refreshInFlight = (async () => {
+    try {
+      return await refreshTokens();
+    } finally {
+      refreshInFlight = null;
+    }
+  })();
+  return refreshInFlight;
+}
+
+type RequestConfig = {
+  retry?: boolean;
+  auth?: 'auto' | 'none';
+};
+
 async function request<T>(
   path: string,
-  options: RequestInit = {}
+  options: RequestInit = {},
+  config: RequestConfig = {}
 ): Promise<T> {
   const url = `${BASE_URL}${path}`;
+  const includeAuth = config.auth !== 'none';
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    ...getAuthHeader(),
     ...(options.headers as Record<string, string> | undefined),
+    ...(includeAuth ? getAuthHeader() : {}),
   };
 
   const res = await fetch(url, { ...options, headers });
 
-  if (!res.ok) {
-    // Clear stale tokens on 401 so the user is redirected to sign-in
-    if (res.status === 401 && typeof window !== 'undefined') {
-      localStorage.removeItem('access_token');
+  if (res.status === 401 && includeAuth && !config.retry && !shouldSkipRefresh(path)) {
+    const refreshed = await refreshTokensOnce();
+    if (refreshed) {
+      return request<T>(path, options, { retry: true });
     }
+    clearAuthAndRedirect();
+    throw new ApiClientError(401, 'UNAUTHENTICATED', 'Session expired');
+  }
+
+  if (!res.ok) {
     let errorBody: ApiError | null = null;
     try {
       errorBody = (await res.json()) as ApiError;
@@ -270,6 +339,23 @@ function buildQuery(params: Record<string, string | number | boolean | undefined
   return '?' + new URLSearchParams(entries.map(([k, v]) => [k, String(v)])).toString();
 }
 
+function normalizeShareLinkVisibility(
+  visibility: string | null | undefined
+): ShareLink['visibility'] {
+  if (visibility === 'public') return 'public';
+  if (visibility === 'anyoneWithLink') return 'anyoneWithLink';
+  if (visibility === 'anyone_with_link') return 'anyoneWithLink';
+  return 'anyoneWithLink';
+}
+
+function normalizeShareLink(link: ShareLink): ShareLink {
+  return { ...link, visibility: normalizeShareLinkVisibility((link as ShareLink).visibility) };
+}
+
+function normalizeResolvedShareLink(link: ResolvedShareLink): ResolvedShareLink {
+  return { ...link, visibility: normalizeShareLinkVisibility(link.visibility) };
+}
+
 // ---------------------------------------------------------------------------
 // Auth API
 // ---------------------------------------------------------------------------
@@ -295,16 +381,15 @@ export const authApi = {
   },
 
   async refresh(refreshToken?: string): Promise<AuthTokens> {
-    const token = refreshToken ?? (typeof window !== 'undefined' ? localStorage.getItem('refresh_token') : null);
-    if (!token) throw new ApiClientError(401, 'NO_REFRESH_TOKEN', 'No refresh token available');
-
-    const tokens = await request<AuthTokens>('/api/v1/auth/refresh', {
-      method: 'POST',
-      body: JSON.stringify({ refreshToken: token } satisfies RefreshRequest),
-    });
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('access_token', tokens.accessToken);
-      localStorage.setItem('refresh_token', tokens.refreshToken);
+    const token =
+      refreshToken ??
+      (typeof window !== 'undefined' ? localStorage.getItem('refresh_token') : null);
+    if (!token || token === 'undefined' || token === 'null') {
+      throw new ApiClientError(401, 'NO_REFRESH_TOKEN', 'No refresh token available');
+    }
+    const tokens = await refreshTokens(token);
+    if (!tokens) {
+      throw new ApiClientError(401, 'REFRESH_FAILED', 'Unable to refresh session');
     }
     return tokens;
   },
@@ -606,7 +691,7 @@ export interface ResolvedShareLink {
   resourceType: string;
   resourceId: string;
   role: string;
-  visibility: string;
+  visibility: 'public' | 'anyoneWithLink';
   expiresAt: string | null;
   resourceName: string;
 }
@@ -715,7 +800,8 @@ export const sharingApi = {
       ? `/api/v1/drive/files/${resourceId}/share-link`
       : `/api/v1/drive/folders/${resourceId}/share-link`;
     try {
-      return await request<ShareLink>(path);
+      const link = await request<ShareLink>(path);
+      return normalizeShareLink(link);
     } catch (e) {
       if (e instanceof ApiClientError && e.statusCode === 404) return null;
       throw e;
@@ -726,14 +812,16 @@ export const sharingApi = {
     const path = resourceType === 'file'
       ? `/api/v1/drive/files/${resourceId}/share-link`
       : `/api/v1/drive/folders/${resourceId}/share-link`;
-    return request<ShareLink>(path, { method: 'PUT', body: JSON.stringify(body) });
+    const link = await request<ShareLink>(path, { method: 'PUT', body: JSON.stringify(body) });
+    return normalizeShareLink(link);
   },
 
   async updateShareLink(resourceType: ResourceType, resourceId: string, body: UpdateShareLinkRequest): Promise<ShareLink> {
     const path = resourceType === 'file'
       ? `/api/v1/drive/files/${resourceId}/share-link`
       : `/api/v1/drive/folders/${resourceId}/share-link`;
-    return request<ShareLink>(path, { method: 'PATCH', body: JSON.stringify(body) });
+    const link = await request<ShareLink>(path, { method: 'PATCH', body: JSON.stringify(body) });
+    return normalizeShareLink(link);
   },
 
   async deleteShareLink(resourceType: ResourceType, resourceId: string): Promise<void> {
@@ -744,9 +832,18 @@ export const sharingApi = {
   },
 
   async resolveToken(token: string): Promise<ResolvedShareLink> {
-    return request<ResolvedShareLink>(`/api/v1/share/${token}`);
+    const link = await request<ResolvedShareLink>(`/api/v1/share/${token}`, {}, { auth: 'none' });
+    return normalizeResolvedShareLink(link);
   },
 };
+
+export function getShareDownloadUrl(token: string): string {
+  return `${BASE_URL}/api/v1/share/${token}/download`;
+}
+
+export function getSharePreviewUrl(token: string): string {
+  return `${BASE_URL}/api/v1/share/${token}/preview`;
+}
 
 // ---------------------------------------------------------------------------
 // Users API

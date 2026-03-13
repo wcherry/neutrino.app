@@ -1,4 +1,4 @@
-use crate::shared::ApiError;
+use crate::common::ApiError;
 use chrono::{Duration, Utc};
 use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
@@ -43,7 +43,7 @@ impl TokenService {
             &EncodingKey::from_secret(self.secret.as_bytes()),
         )
         .map_err(|e| {
-            log::error!("Failed to generate access token: {:?}", e);
+            tracing::error!("Failed to generate access token: {:?}", e);
             ApiError::internal("Failed to generate access token")
         })
     }
@@ -69,7 +69,7 @@ impl TokenService {
         )
         .map(|data| data.claims)
         .map_err(|e| {
-            log::warn!("Token validation failed: {:?}", e);
+            tracing::warn!("Token validation failed: {:?}", e);
             ApiError::unauthorized("Invalid or expired token")
         })
     }

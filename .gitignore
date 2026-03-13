@@ -26,6 +26,9 @@ Cargo.lock
 
 target/**
 node_modules
+apps/web/out
 
 tmp
 apps/web/.next
+data/
+logs/

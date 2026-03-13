@@ -8,6 +8,7 @@ pub struct Config {
     pub jwt_access_expiry_secs: u64,
     pub jwt_refresh_expiry_secs: u64,
     pub log_level: String,
+    pub log_path: Option<String>,
 }
 
 impl Config {
@@ -40,6 +41,11 @@ impl Config {
             .map_err(|e| format!("Invalid JWT_REFRESH_EXPIRY_SECS: {}", e))?;
 
         let log_level = env::var("LOG_LEVEL").unwrap_or_else(|_| "info".to_string());
+        
+        let log_path = match std::env::var("LOG_PATH") {
+            Ok(path) => Some(path),
+            _ => None,
+        };
 
         Ok(Config {
             database_url,
@@ -48,6 +54,7 @@ impl Config {
             jwt_access_expiry_secs,
             jwt_refresh_expiry_secs,
             log_level,
+            log_path,
         })
     }
 }

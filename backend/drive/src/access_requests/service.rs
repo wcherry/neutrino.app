@@ -11,7 +11,7 @@ use crate::permissions::{
     repository::PermissionsRepository,
     service::PermissionsService,
 };
-use crate::shared::ApiError;
+use crate::common::ApiError;
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -75,7 +75,7 @@ impl AccessRequestsService {
             status: "pending",
         };
         let result = self.repo.create(&record)?;
-        log::info!(
+        tracing::info!(
             "Access request notification: {} ({}) requested {} access to {} {}",
             req.requester_name, requester_email, req.requested_role, resource_type, resource_id
         );
@@ -158,7 +158,7 @@ impl AccessRequestsService {
         )?;
 
         self.repo.update_status(request_id, "approved")?;
-        log::info!(
+        tracing::info!(
             "Access request approved: {} ({}) approved for {} {} with role {}",
             access_req.requester_name,
             access_req.requester_email,
@@ -199,7 +199,7 @@ impl AccessRequestsService {
         }
 
         self.repo.update_status(request_id, "denied")?;
-        log::info!(
+        tracing::info!(
             "Access request denied: {} for {} {}",
             access_req.requester_email, access_req.resource_type, access_req.resource_id
         );

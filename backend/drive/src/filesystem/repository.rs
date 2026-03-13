@@ -2,7 +2,7 @@ use crate::filesystem::model::{
     FolderRecord, NewFolderRecord, NewShortcutRecord, ShortcutRecord, TrashFolderRecord,
     UpdateFolderRecord,
 };
-use crate::shared::ApiError;
+use crate::common::ApiError;
 use crate::storage::model::FileRecord;
 use crate::schema::{files, folders, shortcuts};
 use chrono::{NaiveDateTime, Utc};
@@ -29,7 +29,7 @@ impl FilesystemRepository {
             .values(&record)
             .execute(&mut conn)
             .map_err(|e| {
-                log::error!("DB create folder error: {:?}", e);
+                tracing::error!("DB create folder error: {:?}", e);
                 ApiError::internal("Database error")
             })?;
 
@@ -38,7 +38,7 @@ impl FilesystemRepository {
             .select(FolderRecord::as_select())
             .first(&mut conn)
             .map_err(|e| {
-                log::error!("DB query folder after insert error: {:?}", e);
+                tracing::error!("DB query folder after insert error: {:?}", e);
                 ApiError::internal("Database error")
             })
     }
@@ -57,7 +57,7 @@ impl FilesystemRepository {
             .first(&mut conn)
             .optional()
             .map_err(|e| {
-                log::error!("DB find folder error: {:?}", e);
+                tracing::error!("DB find folder error: {:?}", e);
                 ApiError::internal("Database error")
             })
     }
@@ -79,7 +79,7 @@ impl FilesystemRepository {
         .set(&changeset)
         .execute(&mut conn)
         .map_err(|e| {
-            log::error!("DB update folder error: {:?}", e);
+            tracing::error!("DB update folder error: {:?}", e);
             ApiError::internal("Database error")
         })?;
 
@@ -104,7 +104,7 @@ impl FilesystemRepository {
         })
         .execute(&mut conn)
         .map_err(|e| {
-            log::error!("DB trash folder error: {:?}", e);
+            tracing::error!("DB trash folder error: {:?}", e);
             ApiError::internal("Database error")
         })?;
 
@@ -136,7 +136,7 @@ impl FilesystemRepository {
         };
 
         result.map_err(|e| {
-            log::error!("DB list subfolders error: {:?}", e);
+            tracing::error!("DB list subfolders error: {:?}", e);
             ApiError::internal("Database error")
         })
     }
@@ -166,7 +166,7 @@ impl FilesystemRepository {
         };
 
         result.map_err(|e| {
-            log::error!("DB list files in folder error: {:?}", e);
+            tracing::error!("DB list files in folder error: {:?}", e);
             ApiError::internal("Database error")
         })
     }
@@ -196,7 +196,7 @@ impl FilesystemRepository {
                 .set((files::name.eq(n), files::updated_at.eq(now)))
                 .execute(&mut conn)
                 .map_err(|e| {
-                    log::error!("DB update file name error: {:?}", e);
+                    tracing::error!("DB update file name error: {:?}", e);
                     ApiError::internal("Database error")
                 })?;
         }
@@ -211,7 +211,7 @@ impl FilesystemRepository {
                     .execute(&mut conn),
             }
             .map_err(|e| {
-                log::error!("DB update file folder_id error: {:?}", e);
+                tracing::error!("DB update file folder_id error: {:?}", e);
                 ApiError::internal("Database error")
             })?;
         }
@@ -221,7 +221,7 @@ impl FilesystemRepository {
                 .set((files::is_starred.eq(starred), files::updated_at.eq(now)))
                 .execute(&mut conn)
                 .map_err(|e| {
-                    log::error!("DB update file star error: {:?}", e);
+                    tracing::error!("DB update file star error: {:?}", e);
                     ApiError::internal("Database error")
                 })?;
         }
@@ -232,7 +232,7 @@ impl FilesystemRepository {
             .select(FileRecord::as_select())
             .first(&mut conn)
             .map_err(|e| {
-                log::error!("DB find file after update error: {:?}", e);
+                tracing::error!("DB find file after update error: {:?}", e);
                 ApiError::internal("Database error")
             })
     }
@@ -254,7 +254,7 @@ impl FilesystemRepository {
         ))
         .execute(&mut conn)
         .map_err(|e| {
-            log::error!("DB trash file error: {:?}", e);
+            tracing::error!("DB trash file error: {:?}", e);
             ApiError::internal("Database error")
         })?;
 
@@ -278,7 +278,7 @@ impl FilesystemRepository {
         ))
         .execute(&mut conn)
         .map_err(|e| {
-            log::error!("DB restore file error: {:?}", e);
+            tracing::error!("DB restore file error: {:?}", e);
             ApiError::internal("Database error")
         })?;
 
@@ -302,7 +302,7 @@ impl FilesystemRepository {
         })
         .execute(&mut conn)
         .map_err(|e| {
-            log::error!("DB restore folder error: {:?}", e);
+            tracing::error!("DB restore folder error: {:?}", e);
             ApiError::internal("Database error")
         })?;
 
@@ -324,7 +324,7 @@ impl FilesystemRepository {
             .first(&mut conn)
             .optional()
             .map_err(|e| {
-                log::error!("DB find trashed file error: {:?}", e);
+                tracing::error!("DB find trashed file error: {:?}", e);
                 ApiError::internal("Database error")
             })?;
 
@@ -336,7 +336,7 @@ impl FilesystemRepository {
             )
             .execute(&mut conn)
             .map_err(|e| {
-                log::error!("DB delete file error: {:?}", e);
+                tracing::error!("DB delete file error: {:?}", e);
                 ApiError::internal("Database error")
             })?;
         }
@@ -359,7 +359,7 @@ impl FilesystemRepository {
             .first::<String>(&mut conn)
             .optional()
             .map_err(|e| {
-                log::error!("DB find trashed folder error: {:?}", e);
+                tracing::error!("DB find trashed folder error: {:?}", e);
                 ApiError::internal("Database error")
             })?;
 
@@ -371,7 +371,7 @@ impl FilesystemRepository {
             )
             .execute(&mut conn)
             .map_err(|e| {
-                log::error!("DB delete folder error: {:?}", e);
+                tracing::error!("DB delete folder error: {:?}", e);
                 ApiError::internal("Database error")
             })?;
             Ok(true)
@@ -392,7 +392,7 @@ impl FilesystemRepository {
             .order(files::trashed_at.desc())
             .load(&mut conn)
             .map_err(|e| {
-                log::error!("DB list trashed files error: {:?}", e);
+                tracing::error!("DB list trashed files error: {:?}", e);
                 ApiError::internal("Database error")
             })
     }
@@ -407,7 +407,7 @@ impl FilesystemRepository {
             .order(folders::trashed_at.desc())
             .load(&mut conn)
             .map_err(|e| {
-                log::error!("DB list trashed folders error: {:?}", e);
+                tracing::error!("DB list trashed folders error: {:?}", e);
                 ApiError::internal("Database error")
             })
     }
@@ -428,7 +428,7 @@ impl FilesystemRepository {
             .select(FileRecord::as_select())
             .load(&mut conn)
             .map_err(|e| {
-                log::error!("DB query expired trashed files error: {:?}", e);
+                tracing::error!("DB query expired trashed files error: {:?}", e);
                 ApiError::internal("Database error")
             })?;
 
@@ -440,7 +440,7 @@ impl FilesystemRepository {
         )
         .execute(&mut conn)
         .map_err(|e| {
-            log::error!("DB purge trashed files error: {:?}", e);
+            tracing::error!("DB purge trashed files error: {:?}", e);
             ApiError::internal("Database error")
         })?;
 
@@ -452,7 +452,7 @@ impl FilesystemRepository {
         )
         .execute(&mut conn)
         .map_err(|e| {
-            log::error!("DB purge trashed folders error: {:?}", e);
+            tracing::error!("DB purge trashed folders error: {:?}", e);
             ApiError::internal("Database error")
         })?;
 
@@ -468,7 +468,7 @@ impl FilesystemRepository {
             .select(FileRecord::as_select())
             .load(&mut conn)
             .map_err(|e| {
-                log::error!("DB query all trashed files error: {:?}", e);
+                tracing::error!("DB query all trashed files error: {:?}", e);
                 ApiError::internal("Database error")
             })?;
 
@@ -479,7 +479,7 @@ impl FilesystemRepository {
         )
         .execute(&mut conn)
         .map_err(|e| {
-            log::error!("DB empty trash files error: {:?}", e);
+            tracing::error!("DB empty trash files error: {:?}", e);
             ApiError::internal("Database error")
         })?;
 
@@ -490,7 +490,7 @@ impl FilesystemRepository {
         )
         .execute(&mut conn)
         .map_err(|e| {
-            log::error!("DB empty trash folders error: {:?}", e);
+            tracing::error!("DB empty trash folders error: {:?}", e);
             ApiError::internal("Database error")
         })?;
 
@@ -520,7 +520,7 @@ impl FilesystemRepository {
         ))
         .execute(&mut conn)
         .map_err(|e| {
-            log::error!("DB bulk trash files error: {:?}", e);
+            tracing::error!("DB bulk trash files error: {:?}", e);
             ApiError::internal("Database error")
         })?;
 
@@ -548,7 +548,7 @@ impl FilesystemRepository {
         })
         .execute(&mut conn)
         .map_err(|e| {
-            log::error!("DB bulk trash folders error: {:?}", e);
+            tracing::error!("DB bulk trash folders error: {:?}", e);
             ApiError::internal("Database error")
         })?;
 
@@ -586,7 +586,7 @@ impl FilesystemRepository {
             .execute(&mut conn),
         }
         .map_err(|e| {
-            log::error!("DB bulk move files error: {:?}", e);
+            tracing::error!("DB bulk move files error: {:?}", e);
             ApiError::internal("Database error")
         })?;
 
@@ -627,7 +627,7 @@ impl FilesystemRepository {
             .execute(&mut conn),
         }
         .map_err(|e| {
-            log::error!("DB bulk move folders error: {:?}", e);
+            tracing::error!("DB bulk move folders error: {:?}", e);
             ApiError::internal("Database error")
         })?;
 
@@ -648,7 +648,7 @@ impl FilesystemRepository {
             .select(FileRecord::as_select())
             .load(&mut conn)
             .map_err(|e| {
-                log::error!("DB find files by ids error: {:?}", e);
+                tracing::error!("DB find files by ids error: {:?}", e);
                 ApiError::internal("Database error")
             })
     }
@@ -662,7 +662,7 @@ impl FilesystemRepository {
             .values(&record)
             .execute(&mut conn)
             .map_err(|e| {
-                log::error!("DB create shortcut error: {:?}", e);
+                tracing::error!("DB create shortcut error: {:?}", e);
                 ApiError::internal("Database error")
             })?;
 
@@ -671,7 +671,7 @@ impl FilesystemRepository {
             .select(ShortcutRecord::as_select())
             .first(&mut conn)
             .map_err(|e| {
-                log::error!("DB query shortcut after insert error: {:?}", e);
+                tracing::error!("DB query shortcut after insert error: {:?}", e);
                 ApiError::internal("Database error")
             })
     }
@@ -686,7 +686,7 @@ impl FilesystemRepository {
         )
         .execute(&mut conn)
         .map_err(|e| {
-            log::error!("DB delete shortcut error: {:?}", e);
+            tracing::error!("DB delete shortcut error: {:?}", e);
             ApiError::internal("Database error")
         })?;
 
@@ -714,7 +714,7 @@ impl FilesystemRepository {
         };
 
         result.map_err(|e| {
-            log::error!("DB list shortcuts error: {:?}", e);
+            tracing::error!("DB list shortcuts error: {:?}", e);
             ApiError::internal("Database error")
         })
     }
@@ -731,7 +731,7 @@ impl FilesystemRepository {
             .select(FileRecord::as_select())
             .load(&mut conn)
             .map_err(|e| {
-                log::error!("DB find shared files error: {:?}", e);
+                tracing::error!("DB find shared files error: {:?}", e);
                 ApiError::internal("Database error")
             })
     }
@@ -748,7 +748,7 @@ impl FilesystemRepository {
             .select(FolderRecord::as_select())
             .load(&mut conn)
             .map_err(|e| {
-                log::error!("DB find shared folders error: {:?}", e);
+                tracing::error!("DB find shared folders error: {:?}", e);
                 ApiError::internal("Database error")
             })
     }
@@ -758,7 +758,7 @@ impl FilesystemRepository {
     ) -> Result<diesel::r2d2::PooledConnection<ConnectionManager<SqliteConnection>>, ApiError>
     {
         self.pool.get().map_err(|e| {
-            log::error!("DB pool error: {:?}", e);
+            tracing::error!("DB pool error: {:?}", e);
             ApiError::internal("Database connection error")
         })
     }

@@ -2,13 +2,13 @@ use crate::auth::{
     dto::{AuthResponse, LoginRequest, RefreshRequest, RegisterRequest, RegisterResponse, UserLookupResponse, UserProfileResponse},
     service::AuthService,
 };
-use crate::shared::{ApiError, AuthenticatedUser};
+use crate::common::{ApiError, AuthenticatedUser};
 use actix_web::{get, post, web};
 use serde::Deserialize;
 use std::sync::Arc;
 use utoipa::OpenApi;
 
-use log::error;
+use tracing::error;
 
 
 pub struct AuthApiState {

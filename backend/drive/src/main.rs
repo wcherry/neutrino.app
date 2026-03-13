@@ -2,7 +2,7 @@ use actix_web::{get, web, App, HttpResponse, HttpServer, Responder, middleware::
 use diesel::r2d2::{ConnectionManager, Pool};
 use diesel::{RunQueryDsl, SqliteConnection};
 use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
-use log::{error, info};
+use tracing::{error, info};
 use serde_json::json;
 use std::sync::Arc;
 use utoipa::OpenApi;
@@ -13,7 +13,7 @@ mod config;
 mod filesystem;
 mod permissions;
 mod schema;
-mod shared;
+mod common;
 mod sharing;
 mod storage;
 
@@ -38,7 +38,7 @@ use crate::sharing::{
     repository::SharingRepository,
     service::SharingService,
 };
-use crate::shared::TokenService;
+use crate::common::TokenService;
 use crate::storage::{
     api::{StorageApiDoc, StorageApiState},
     repository::StorageRepository,
