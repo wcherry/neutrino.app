@@ -9,9 +9,10 @@ RUN corepack enable
 # Copy workspace manifests first (for caching)
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY web/package.json web/
+COPY packages/*/package.json packages/*/
 
 # Install dependencies
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --prod=false
 
 # Copy the rest of the repository
 COPY . .
