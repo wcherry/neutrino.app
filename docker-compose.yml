@@ -2,7 +2,7 @@ version: "3.9"
 
 services:
 
-  nginx-proxy:
+  web:
     image: ghcr.io/org/repo/web:latest
     container_name: neutrino-nginx-proxy
     ports:

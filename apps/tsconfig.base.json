@@ -14,7 +14,8 @@
     "jsx": "preserve",
     "incremental": true,
     "paths": {
-      "@neutrino/ui": ["./packages/ui/src/index.ts"]
+      "@neutrino/ui": ["./packages/ui/src/index.ts"],
+      "@neutrino/ui/styles": ["./packages/ui/src/styles/index.css"]
     }
   }
 }

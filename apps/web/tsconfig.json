@@ -8,7 +8,8 @@
     ],
     "paths": {
       "@/*": ["./src/*"],
-      "@neutrino/ui": ["../packages/ui/src/index.ts"]
+      "@neutrino/ui": ["../packages/ui/src/index.ts"],
+      "@neutrino/ui/styles": ["../packages/ui/src/styles/index.css"]
     }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
