@@ -56,10 +56,9 @@ jobs:
         with:
           images: ghcr.io/${{ github.repository }}/${{ matrix.image }}
           tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=raw,value=latest,enable={{is_tag}}
             type=ref,event=tag
             type=sha,format=short
+            ${{ github.ref == 'refs/heads/main' && 'type=raw,value=latest' || '' }}
 
       - name: Build and push
         uses: docker/build-push-action@v6
