@@ -50,17 +50,14 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract image metadata
-        id: meta
+      - id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/${{ github.repository }}/${{ matrix.image }}
-          flavor: |
-            latest=${{ github.ref == 'refs/heads/main' }}
-          tags: |
-            type=ref,event=tag
-            type=sha,format=short
-
+        images: ghcr.io/org/repo/web
+        tags: |
+          type=ref,event=branch
+          type=sha
+          type=raw,value=latest,enable={{is_default_branch}}
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
