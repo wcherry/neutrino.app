@@ -466,7 +466,7 @@ export const storageApi = {
       });
 
       const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
-      xhr.open('POST', `${BASE_URL}/api/v1/drive/files`);
+      xhr.open('POST', `${BASE_URL}/api/v1/drive/files/upload`);
       if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
       xhr.send(formData);
     });
@@ -913,6 +913,86 @@ export const accessRequestsApi = {
 export const sharedWithMeApi = {
   async list(): Promise<SharedWithMeResponse> {
     return request<SharedWithMeResponse>('/api/v1/drive/shared-with-me');
+  },
+};
+
+// ---------------------------------------------------------------------------
+// Docs API
+// ---------------------------------------------------------------------------
+
+export interface PageSetup {
+  marginTop: number;
+  marginBottom: number;
+  marginLeft: number;
+  marginRight: number;
+  orientation: 'portrait' | 'landscape';
+  pageSize: 'letter' | 'a4' | 'legal';
+}
+
+export interface DocResponse {
+  id: string;
+  title: string;
+  content: string;
+  pageSetup: PageSetup;
+  folderId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DocMetaResponse {
+  id: string;
+  title: string;
+  folderId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateDocRequest {
+  title: string;
+  folderId?: string | null;
+}
+
+export interface SaveDocRequest {
+  content?: string;
+  pageSetup?: PageSetup;
+  title?: string;
+}
+
+export interface ExportTextResponse {
+  text: string;
+  wordCount: number;
+  charCount: number;
+}
+
+export interface ListDocsResponse {
+  docs: DocMetaResponse[];
+}
+
+export const docsApi = {
+  async listDocs(): Promise<ListDocsResponse> {
+    return request<ListDocsResponse>('/api/v1/docs');
+  },
+
+  async createDoc(body: CreateDocRequest): Promise<DocResponse> {
+    return request<DocResponse>('/api/v1/docs', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  },
+
+  async getDoc(docId: string): Promise<DocResponse> {
+    return request<DocResponse>(`/api/v1/docs/${docId}`);
+  },
+
+  async saveDoc(docId: string, body: SaveDocRequest): Promise<DocMetaResponse> {
+    return request<DocMetaResponse>(`/api/v1/docs/${docId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    });
+  },
+
+  async exportText(docId: string): Promise<ExportTextResponse> {
+    return request<ExportTextResponse>(`/api/v1/docs/${docId}/export/text`);
   },
 };
 

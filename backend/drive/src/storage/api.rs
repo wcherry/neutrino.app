@@ -5,19 +5,21 @@ use crate::irm::service::IrmService;
 use crate::permissions::service::PermissionsService;
 use crate::storage::{
     dto::{
-        FileMetadataResponse, FileOrderField, FileVersionResponse, ListFilesResponse,
-        ListVersionsResponse, QuotaResponse, UpdateVersionLabelRequest, VersionOrderField,
-        ZipContentsResponse, ZipEntry, ZipEntryOrderField,
+        CreateFileRequest, DocFileMetadataResponse, FileMetadataResponse, FileOrderField,
+        FileVersionResponse, ListFilesResponse, ListVersionsResponse, QuotaResponse,
+        UpdateVersionLabelRequest, VersionOrderField, ZipContentsResponse, ZipEntry,
+        ZipEntryOrderField,
     },
     service::StorageService,
 };
 use actix_files::NamedFile;
 use actix_multipart::Multipart;
 use actix_web::{delete, get, patch, post, web, HttpRequest, HttpResponse};
+use serde::Deserialize;
 use futures_util::StreamExt;
 use std::sync::Arc;
 use tokio::io::{AsyncWriteExt, BufWriter};
-use utoipa::OpenApi;
+use utoipa::{OpenApi, ToSchema};
 use uuid::Uuid;
 
 pub struct StorageApiState {
@@ -38,7 +40,7 @@ pub struct StorageApiState {
     security(("bearer_auth" = [])),
     tag = "storage"
 )]
-#[post("/files")]
+#[post("/files/upload")]
 pub async fn upload_file(
     state: web::Data<StorageApiState>,
     user: AuthenticatedUser,
@@ -156,6 +158,86 @@ pub async fn upload_file(
 }
 
 #[utoipa::path(
+    post,
+    path = "/api/v1/drive/files",
+    request_body = CreateFileRequest,
+    responses(
+        (status = 201, description = "File record created", body = DocFileMetadataResponse),
+        (status = 400, description = "Invalid request"),
+    ),
+    security(("bearer_auth" = [])),
+    tag = "storage"
+)]
+#[post("/files")]
+pub async fn create_file_record(
+    state: web::Data<StorageApiState>,
+    user: AuthenticatedUser,
+    body: web::Json<CreateFileRequest>,
+) -> Result<HttpResponse, ApiError> {
+    let req = body.into_inner();
+    let name = req.name.trim().to_string();
+    if name.is_empty() {
+        return Err(ApiError::bad_request("File name cannot be empty"));
+    }
+    let file = state
+        .storage_service
+        .register_doc_file(&user, &req.id, &name, req.folder_id.as_deref())
+        .await?;
+    let response = DocFileMetadataResponse {
+        id: file.id,
+        name: file.name,
+        folder_id: file.folder_id,
+        deleted_at: file.deleted_at,
+        your_role: "owner".to_string(), 
+        storage_path: match file.storage_path.len()>1 {true => Some(file.storage_path), _ => None,},    //TODO: Storage path can be None
+        mime_type: match file.mime_type.len()>1 {true => Some(file.mime_type), _ => None,},             //TODO: Mime type can be None
+        created_at: file.created_at,
+        updated_at: file.updated_at,
+    };
+    Ok(HttpResponse::Created().json(response))
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/v1/drive/files/{id}/info",
+    params(("id" = String, Path, description = "File ID")),
+    responses(
+        (status = 200, description = "File info with caller's role", body = DocFileMetadataResponse),
+        (status = 403, description = "Access denied"),
+        (status = 404, description = "File not found"),
+    ),
+    security(("bearer_auth" = [])),
+    tag = "storage"
+)]
+#[get("/files/{id}/info")]
+pub async fn get_file_info(
+    state: web::Data<StorageApiState>,
+    user: AuthenticatedUser,
+    path: web::Path<String>,
+) -> Result<web::Json<DocFileMetadataResponse>, ApiError> {
+    let file_id = path.into_inner();
+    let file = state
+        .storage_service
+        .find_file_any_user(&file_id)?
+        .ok_or_else(|| ApiError::not_found("File not found"))?;
+    let role = state
+        .permissions_service
+        .get_effective_role(&user.user_id, "file", &file_id)?
+        .ok_or_else(|| ApiError::new(403, "FORBIDDEN", "Access denied"))?;
+    Ok(web::Json(DocFileMetadataResponse {
+        id: file.id,
+        name: file.name,
+        folder_id: file.folder_id,
+        deleted_at: file.deleted_at,
+        your_role: role,
+        storage_path: match file.storage_path.len()>1 {true => Some(file.storage_path), _ => None,},    //TODO: Storage path can be None
+        mime_type: match file.mime_type.len()>1 {true => Some(file.mime_type), _ => None,},             //TODO: Mime type can be None
+        created_at: file.created_at,
+        updated_at: file.updated_at,
+    }))
+}
+
+#[utoipa::path(
     get,
     path = "/api/v1/drive/files",
     params(
@@ -225,26 +307,27 @@ pub async fn download_file(
     req: HttpRequest,
 ) -> Result<HttpResponse, ApiError> {
     let file_id = path.into_inner();
-    let (file_path, mime_type, file_name) = state
-        .storage_service
-        .resolve_file_path(&user.user_id, &file_id)?;
 
-    // Enforce IRM download restriction based on caller's effective role
     let role = state
         .permissions_service
-        .get_effective_role(&user.user_id, "file", &file_id)?;
-    if let Some(role_str) = &role {
-        let restrictions = state
-            .irm_service
-            .get_restrictions("file", &file_id, role_str)?;
-        if restrictions.restrict_download {
-            return Err(ApiError::new(
-                403,
-                "DOWNLOAD_RESTRICTED",
-                "Download is restricted by the file owner's IRM policy",
-            ));
-        }
+        .get_effective_role(&user.user_id, "file", &file_id)?
+        .ok_or_else(|| ApiError::new(403, "FORBIDDEN", "Access denied"))?;
+
+    // Enforce IRM download restriction based on caller's effective role
+    let restrictions = state
+        .irm_service
+        .get_restrictions("file", &file_id, &role)?;
+    if restrictions.restrict_download {
+        return Err(ApiError::new(
+            403,
+            "DOWNLOAD_RESTRICTED",
+            "Download is restricted by the file owner's IRM policy",
+        ));
     }
+
+    let (file_path, mime_type, file_name) = state
+        .storage_service
+        .resolve_file_path_by_id(&file_id)?;
 
     let content_type: mime::Mime = mime_type
         .parse()
@@ -287,22 +370,21 @@ pub async fn preview_file(
     req: HttpRequest,
 ) -> Result<HttpResponse, ApiError> {
     let file_id = path.into_inner();
-    let (file_path, mime_type, _) = state
-        .storage_service
-        .resolve_file_path(&user.user_id, &file_id)?;
 
-    // Check IRM print/copy restrictions for this user's role
     let role = state
         .permissions_service
-        .get_effective_role(&user.user_id, "file", &file_id)?;
-    let restrict_print_copy = if let Some(role_str) = &role {
-        state
-            .irm_service
-            .get_restrictions("file", &file_id, role_str)?
-            .restrict_print_copy
-    } else {
-        false
-    };
+        .get_effective_role(&user.user_id, "file", &file_id)?
+        .ok_or_else(|| ApiError::new(403, "FORBIDDEN", "Access denied"))?;
+
+    // Check IRM print/copy restrictions for this user's role
+    let restrict_print_copy = state
+        .irm_service
+        .get_restrictions("file", &file_id, &role)?
+        .restrict_print_copy;
+
+    let (file_path, mime_type, _) = state
+        .storage_service
+        .resolve_file_path_by_id(&file_id)?;
 
     let content_type: mime::Mime = mime_type
         .parse()
@@ -362,9 +444,15 @@ pub async fn zip_contents(
     query: web::Query<ListQueryParams<ZipEntryOrderField>>,
 ) -> Result<web::Json<ZipContentsResponse>, ApiError> {
     let file_id = path.into_inner();
+
+    state
+        .permissions_service
+        .get_effective_role(&user.user_id, "file", &file_id)?
+        .ok_or_else(|| ApiError::new(403, "FORBIDDEN", "Access denied"))?;
+
     let (file_path, _, _) = state
         .storage_service
-        .resolve_file_path(&user.user_id, &file_id)?;
+        .resolve_file_path_by_id(&file_id)?;
 
     let entries = web::block(move || {
         let file = std::fs::File::open(&file_path).map_err(|e| {
@@ -444,6 +532,14 @@ pub async fn upload_version(
 ) -> Result<web::Json<FileVersionResponse>, ApiError> {
     let file_id = path.into_inner();
 
+    let role = state
+        .permissions_service
+        .get_effective_role(&user.user_id, "file", &file_id)?
+        .ok_or_else(|| ApiError::new(403, "FORBIDDEN", "Access denied"))?;
+    if role != "owner" && role != "editor" {
+        return Err(ApiError::new(403, "FORBIDDEN", "Edit access required"));
+    }
+
     while let Some(field) = payload.next().await {
         let mut field = field.map_err(|e| {
             tracing::error!("Multipart error: {:?}", e);
@@ -489,7 +585,7 @@ pub async fn upload_version(
 
         let response = state
             .storage_service
-            .upload_new_version(&user.user_id, &file_id, &temp_path, size)
+            .upload_new_version(&file_id, &temp_path, size)
             .inspect_err(|_| {
                 let _ = std::fs::remove_file(&temp_path);
             })?;
@@ -646,6 +742,8 @@ pub async fn delete_version(
 
 pub fn configure(conf: &mut web::ServiceConfig) {
     conf.service(upload_file)
+        .service(create_file_record)
+        .service(get_file_info)
         .service(list_files)
         .service(get_file_metadata)
         .service(preview_file)
@@ -663,9 +761,9 @@ pub fn configure(conf: &mut web::ServiceConfig) {
 #[derive(OpenApi)]
 #[openapi(
     paths(
-        upload_file, list_files, get_file_metadata, preview_file, zip_contents, download_file,
-        get_quota, upload_version, list_versions, get_version, update_version_label,
-        restore_version, delete_version,
+        upload_file, create_file_record, get_file_info, list_files, get_file_metadata,
+        preview_file, zip_contents, download_file, get_quota, upload_version, list_versions,
+        get_version, update_version_label, restore_version, delete_version,
     ),
     components(schemas(
         FileMetadataResponse,
@@ -679,6 +777,8 @@ pub fn configure(conf: &mut web::ServiceConfig) {
         ListVersionsResponse,
         VersionOrderField,
         UpdateVersionLabelRequest,
+        CreateFileRequest,
+        DocFileMetadataResponse,
     )),
     tags(
         (name = "storage", description = "File storage endpoints"),

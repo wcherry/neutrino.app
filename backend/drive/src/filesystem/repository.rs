@@ -52,7 +52,7 @@ impl FilesystemRepository {
         folders::table
             .filter(folders::id.eq(folder_id))
             .filter(folders::user_id.eq(user_id))
-            .filter(folders::is_trashed.eq(false))
+            .filter(folders::deleted_at.is_null())
             .select(FolderRecord::as_select())
             .first(&mut conn)
             .optional()
@@ -74,7 +74,7 @@ impl FilesystemRepository {
             folders::table
                 .filter(folders::id.eq(folder_id))
                 .filter(folders::user_id.eq(user_id))
-                .filter(folders::is_trashed.eq(false)),
+                .filter(folders::deleted_at.is_null()),
         )
         .set(&changeset)
         .execute(&mut conn)
@@ -95,11 +95,10 @@ impl FilesystemRepository {
             folders::table
                 .filter(folders::id.eq(folder_id))
                 .filter(folders::user_id.eq(user_id))
-                .filter(folders::is_trashed.eq(false)),
+                .filter(folders::deleted_at.is_null()),
         )
         .set(TrashFolderRecord {
-            is_trashed: true,
-            trashed_at: Some(now),
+            deleted_at: Some(now),
             updated_at: now,
         })
         .execute(&mut conn)
@@ -122,14 +121,14 @@ impl FilesystemRepository {
             Some(pid) => folders::table
                 .filter(folders::user_id.eq(user_id))
                 .filter(folders::parent_id.eq(pid))
-                .filter(folders::is_trashed.eq(false))
+                .filter(folders::deleted_at.is_null())
                 .select(FolderRecord::as_select())
                 .order(folders::name.asc())
                 .load(&mut conn),
             None => folders::table
                 .filter(folders::user_id.eq(user_id))
                 .filter(folders::parent_id.is_null())
-                .filter(folders::is_trashed.eq(false))
+                .filter(folders::deleted_at.is_null())
                 .select(FolderRecord::as_select())
                 .order(folders::name.asc())
                 .load(&mut conn),
@@ -152,14 +151,14 @@ impl FilesystemRepository {
             Some(fid) => files::table
                 .filter(files::user_id.eq(user_id))
                 .filter(files::folder_id.eq(fid))
-                .filter(files::is_trashed.eq(false))
+                .filter(files::deleted_at.is_null())
                 .select(FileRecord::as_select())
                 .order(files::name.asc())
                 .load(&mut conn),
             None => files::table
                 .filter(files::user_id.eq(user_id))
                 .filter(files::folder_id.is_null())
-                .filter(files::is_trashed.eq(false))
+                .filter(files::deleted_at.is_null())
                 .select(FileRecord::as_select())
                 .order(files::name.asc())
                 .load(&mut conn),
@@ -188,7 +187,7 @@ impl FilesystemRepository {
         let base = files::table
             .filter(files::id.eq(file_id))
             .filter(files::user_id.eq(user_id))
-            .filter(files::is_trashed.eq(false));
+            .filter(files::deleted_at.is_null());
 
         // Apply each optional update in sequence
         if let Some(n) = name {
@@ -245,11 +244,10 @@ impl FilesystemRepository {
             files::table
                 .filter(files::id.eq(file_id))
                 .filter(files::user_id.eq(user_id))
-                .filter(files::is_trashed.eq(false)),
+                .filter(files::deleted_at.is_null()),
         )
         .set((
-            files::is_trashed.eq(true),
-            files::trashed_at.eq(now),
+            files::deleted_at.eq(now),
             files::updated_at.eq(now),
         ))
         .execute(&mut conn)
@@ -269,11 +267,10 @@ impl FilesystemRepository {
             files::table
                 .filter(files::id.eq(file_id))
                 .filter(files::user_id.eq(user_id))
-                .filter(files::is_trashed.eq(true)),
+                .filter(files::deleted_at.is_not_null()),
         )
         .set((
-            files::is_trashed.eq(false),
-            files::trashed_at.eq(None::<NaiveDateTime>),
+            files::deleted_at.eq(None::<NaiveDateTime>),
             files::updated_at.eq(now),
         ))
         .execute(&mut conn)
@@ -293,11 +290,10 @@ impl FilesystemRepository {
             folders::table
                 .filter(folders::id.eq(folder_id))
                 .filter(folders::user_id.eq(user_id))
-                .filter(folders::is_trashed.eq(true)),
+                .filter(folders::deleted_at.is_not_null()),
         )
         .set(TrashFolderRecord {
-            is_trashed: false,
-            trashed_at: None,
+            deleted_at: None,
             updated_at: now,
         })
         .execute(&mut conn)
@@ -319,7 +315,7 @@ impl FilesystemRepository {
         let record = files::table
             .filter(files::id.eq(file_id))
             .filter(files::user_id.eq(user_id))
-            .filter(files::is_trashed.eq(true))
+            .filter(files::deleted_at.is_not_null())
             .select(FileRecord::as_select())
             .first(&mut conn)
             .optional()
@@ -354,7 +350,7 @@ impl FilesystemRepository {
         let exists = folders::table
             .filter(folders::id.eq(folder_id))
             .filter(folders::user_id.eq(user_id))
-            .filter(folders::is_trashed.eq(true))
+            .filter(folders::deleted_at.is_not_null())
             .select(folders::id)
             .first::<String>(&mut conn)
             .optional()
@@ -387,9 +383,9 @@ impl FilesystemRepository {
 
         files::table
             .filter(files::user_id.eq(user_id))
-            .filter(files::is_trashed.eq(true))
+            .filter(files::deleted_at.is_not_null())
             .select(FileRecord::as_select())
-            .order(files::trashed_at.desc())
+            .order(files::deleted_at.desc())
             .load(&mut conn)
             .map_err(|e| {
                 tracing::error!("DB list trashed files error: {:?}", e);
@@ -402,9 +398,9 @@ impl FilesystemRepository {
 
         folders::table
             .filter(folders::user_id.eq(user_id))
-            .filter(folders::is_trashed.eq(true))
+            .filter(folders::deleted_at.is_not_null())
             .select(FolderRecord::as_select())
-            .order(folders::trashed_at.desc())
+            .order(folders::deleted_at.desc())
             .load(&mut conn)
             .map_err(|e| {
                 tracing::error!("DB list trashed folders error: {:?}", e);
@@ -423,8 +419,8 @@ impl FilesystemRepository {
         // Collect file records before deleting so caller can remove from disk
         let expired_files: Vec<FileRecord> = files::table
             .filter(files::user_id.eq(user_id))
-            .filter(files::is_trashed.eq(true))
-            .filter(files::trashed_at.le(cutoff))
+            .filter(files::deleted_at.is_not_null())
+            .filter(files::deleted_at.le(cutoff))
             .select(FileRecord::as_select())
             .load(&mut conn)
             .map_err(|e| {
@@ -435,8 +431,8 @@ impl FilesystemRepository {
         diesel::delete(
             files::table
                 .filter(files::user_id.eq(user_id))
-                .filter(files::is_trashed.eq(true))
-                .filter(files::trashed_at.le(cutoff)),
+                .filter(files::deleted_at.is_not_null())
+                .filter(files::deleted_at.le(cutoff)),
         )
         .execute(&mut conn)
         .map_err(|e| {
@@ -447,8 +443,8 @@ impl FilesystemRepository {
         diesel::delete(
             folders::table
                 .filter(folders::user_id.eq(user_id))
-                .filter(folders::is_trashed.eq(true))
-                .filter(folders::trashed_at.le(cutoff)),
+                .filter(folders::deleted_at.is_not_null())
+                .filter(folders::deleted_at.le(cutoff)),
         )
         .execute(&mut conn)
         .map_err(|e| {
@@ -464,7 +460,7 @@ impl FilesystemRepository {
 
         let trashed_files: Vec<FileRecord> = files::table
             .filter(files::user_id.eq(user_id))
-            .filter(files::is_trashed.eq(true))
+            .filter(files::deleted_at.is_not_null())
             .select(FileRecord::as_select())
             .load(&mut conn)
             .map_err(|e| {
@@ -475,7 +471,7 @@ impl FilesystemRepository {
         diesel::delete(
             files::table
                 .filter(files::user_id.eq(user_id))
-                .filter(files::is_trashed.eq(true)),
+                .filter(files::deleted_at.is_not_null()),
         )
         .execute(&mut conn)
         .map_err(|e| {
@@ -486,7 +482,7 @@ impl FilesystemRepository {
         diesel::delete(
             folders::table
                 .filter(folders::user_id.eq(user_id))
-                .filter(folders::is_trashed.eq(true)),
+                .filter(folders::deleted_at.is_not_null()),
         )
         .execute(&mut conn)
         .map_err(|e| {
@@ -511,11 +507,10 @@ impl FilesystemRepository {
             files::table
                 .filter(files::id.eq_any(file_ids))
                 .filter(files::user_id.eq(user_id))
-                .filter(files::is_trashed.eq(false)),
+                .filter(files::deleted_at.is_null()),
         )
         .set((
-            files::is_trashed.eq(true),
-            files::trashed_at.eq(now),
+            files::deleted_at.eq(now),
             files::updated_at.eq(now),
         ))
         .execute(&mut conn)
@@ -539,11 +534,10 @@ impl FilesystemRepository {
             folders::table
                 .filter(folders::id.eq_any(folder_ids))
                 .filter(folders::user_id.eq(user_id))
-                .filter(folders::is_trashed.eq(false)),
+                .filter(folders::deleted_at.is_null()),
         )
         .set(TrashFolderRecord {
-            is_trashed: true,
-            trashed_at: Some(now),
+            deleted_at: Some(now),
             updated_at: now,
         })
         .execute(&mut conn)
@@ -569,7 +563,7 @@ impl FilesystemRepository {
                 files::table
                     .filter(files::id.eq_any(file_ids))
                     .filter(files::user_id.eq(user_id))
-                    .filter(files::is_trashed.eq(false)),
+                    .filter(files::deleted_at.is_null()),
             )
             .set((files::folder_id.eq(Some(fid)), files::updated_at.eq(now)))
             .execute(&mut conn),
@@ -577,7 +571,7 @@ impl FilesystemRepository {
                 files::table
                     .filter(files::id.eq_any(file_ids))
                     .filter(files::user_id.eq(user_id))
-                    .filter(files::is_trashed.eq(false)),
+                    .filter(files::deleted_at.is_null()),
             )
             .set((
                 files::folder_id.eq(None::<String>),
@@ -607,7 +601,7 @@ impl FilesystemRepository {
                 folders::table
                     .filter(folders::id.eq_any(folder_ids))
                     .filter(folders::user_id.eq(user_id))
-                    .filter(folders::is_trashed.eq(false)),
+                    .filter(folders::deleted_at.is_null()),
             )
             .set((
                 folders::parent_id.eq(Some(fid)),
@@ -618,7 +612,7 @@ impl FilesystemRepository {
                 folders::table
                     .filter(folders::id.eq_any(folder_ids))
                     .filter(folders::user_id.eq(user_id))
-                    .filter(folders::is_trashed.eq(false)),
+                    .filter(folders::deleted_at.is_null()),
             )
             .set((
                 folders::parent_id.eq(None::<String>),
@@ -644,7 +638,7 @@ impl FilesystemRepository {
         files::table
             .filter(files::id.eq_any(file_ids))
             .filter(files::user_id.eq(user_id))
-            .filter(files::is_trashed.eq(false))
+            .filter(files::deleted_at.is_null())
             .select(FileRecord::as_select())
             .load(&mut conn)
             .map_err(|e| {
@@ -727,7 +721,7 @@ impl FilesystemRepository {
         let mut conn = self.get_conn()?;
         files::table
             .filter(files::id.eq_any(file_ids))
-            .filter(files::is_trashed.eq(false))
+            .filter(files::deleted_at.is_null())
             .select(FileRecord::as_select())
             .load(&mut conn)
             .map_err(|e| {
@@ -744,7 +738,7 @@ impl FilesystemRepository {
         let mut conn = self.get_conn()?;
         folders::table
             .filter(folders::id.eq_any(folder_ids))
-            .filter(folders::is_trashed.eq(false))
+            .filter(folders::deleted_at.is_null())
             .select(FolderRecord::as_select())
             .load(&mut conn)
             .map_err(|e| {

@@ -1,4 +1,5 @@
 use serde::Deserialize;
+use std::collections::HashMap;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -11,6 +12,8 @@ pub enum OrderDirection {
 
 /// Generic paginated list query usable by any feature.
 /// `F` is the domain-specific order field enum (must implement `Deserialize`).
+/// Any additional query params beyond the known fields are captured in `filters`
+/// and can be used for domain-specific filtering (e.g. `mimeType`, `folderId`).
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ListQuery<F> {
@@ -20,6 +23,8 @@ pub struct ListQuery<F> {
     pub offset: i64,
     pub order_by: Option<F>,
     pub direction: Option<OrderDirection>,
+    #[serde(flatten)]
+    pub filters: HashMap<String, String>,
 }
 
 /// Optional list query that preserves existing behavior when parameters are omitted.

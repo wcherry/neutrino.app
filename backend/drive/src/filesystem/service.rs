@@ -318,9 +318,9 @@ impl FilesystemService {
             |a, b, order_by| match order_by {
                 TrashOrderField::Name => a.name.cmp(&b.name),
                 TrashOrderField::TrashedAt => a
-                    .trashed_at
+                    .deleted_at
                     .unwrap_or(a.updated_at)
-                    .cmp(&b.trashed_at.unwrap_or(b.updated_at)),
+                    .cmp(&b.deleted_at.unwrap_or(b.updated_at)),
             },
         );
 
@@ -332,9 +332,9 @@ impl FilesystemService {
             |a, b, order_by| match order_by {
                 TrashOrderField::Name => a.name.cmp(&b.name),
                 TrashOrderField::TrashedAt => a
-                    .trashed_at
+                    .deleted_at
                     .unwrap_or(a.updated_at)
-                    .cmp(&b.trashed_at.unwrap_or(b.updated_at)),
+                    .cmp(&b.deleted_at.unwrap_or(b.updated_at)),
             },
         );
 

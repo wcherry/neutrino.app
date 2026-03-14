@@ -896,6 +896,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "docs"
+version = "0.1.0"
+dependencies = [
+ "actix-cors",
+ "actix-web",
+ "chrono",
+ "diesel",
+ "diesel_migrations",
+ "dotenvy",
+ "env_logger",
+ "jsonwebtoken",
+ "libsqlite3-sys",
+ "log",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "shared",
+ "thiserror 1.0.69",
+ "tokio",
+ "tracing",
+ "utoipa",
+ "utoipa-swagger-ui",
+ "uuid",
+]
+
+[[package]]
 name = "dotenvy"
 version = "0.15.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2244,6 +2270,7 @@ dependencies = [
  "bytes",
  "encoding_rs",
  "futures-core",
+ "futures-util",
  "h2 0.4.13",
  "http 1.4.0",
  "http-body",
@@ -2255,6 +2282,7 @@ dependencies = [
  "js-sys",
  "log",
  "mime",
+ "mime_guess",
  "native-tls",
  "percent-encoding",
  "pin-project-lite",

@@ -118,6 +118,14 @@ pub struct UpdateVersionLabelRequest {
     pub label: Option<String>,
 }
 
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateFileRequest {
+    pub id: String,
+    pub name: String,
+    pub folder_id: Option<String>,
+}
+
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct QuotaResponse {
@@ -127,4 +135,18 @@ pub struct QuotaResponse {
     pub quota_bytes: Option<i64>,
     /// `null` means no limit
     pub daily_cap_bytes: Option<i64>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DocFileMetadataResponse {
+    pub id: String,
+    pub name: String,
+    pub folder_id: Option<String>,
+    pub deleted_at: Option<NaiveDateTime>,
+    pub your_role: String,
+    pub storage_path: Option<String>,
+    pub mime_type: Option<String>,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
 }

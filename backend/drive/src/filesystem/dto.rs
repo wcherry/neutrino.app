@@ -169,7 +169,7 @@ pub struct TrashFileItem {
     pub name: String,
     pub size_bytes: i64,
     pub mime_type: String,
-    pub trashed_at: NaiveDateTime,
+    pub deleted_at: NaiveDateTime,
 }
 
 impl From<FileRecord> for TrashFileItem {
@@ -179,7 +179,7 @@ impl From<FileRecord> for TrashFileItem {
             name: f.name,
             size_bytes: f.size_bytes,
             mime_type: f.mime_type,
-            trashed_at: f.trashed_at.unwrap_or(f.updated_at),
+            deleted_at: f.deleted_at.unwrap_or(f.updated_at),
         }
     }
 }
@@ -189,7 +189,7 @@ impl From<FileRecord> for TrashFileItem {
 pub struct TrashFolderItem {
     pub id: String,
     pub name: String,
-    pub trashed_at: NaiveDateTime,
+    pub deleted_at: NaiveDateTime,
 }
 
 impl From<FolderRecord> for TrashFolderItem {
@@ -197,7 +197,7 @@ impl From<FolderRecord> for TrashFolderItem {
         TrashFolderItem {
             id: f.id,
             name: f.name,
-            trashed_at: f.trashed_at.unwrap_or(f.updated_at),
+            deleted_at: f.deleted_at.unwrap_or(f.updated_at),
         }
     }
 }

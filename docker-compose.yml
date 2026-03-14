@@ -5,9 +5,8 @@ networks:
     driver: bridge
 
 services:
-
   web:
-    image:  ghcr.io/wcherry/neutrino.app/web:sha-45769fc
+    image:  ghcr.io/wcherry/neutrino.app/web:latest
     extra_hosts:
        - "host.docker.internal:host-gateway"
     container_name: neutrino-nginx-proxy
@@ -20,7 +19,7 @@ services:
     restart: unless-stopped
 
   auth:
-    image:  ghcr.io/wcherry/neutrino.app/auth:sha-45769fc
+    image:  ghcr.io/wcherry/neutrino.app/auth:latest
     container_name: neutrino-auth-service
     networks:
       - neutrino-net
@@ -35,10 +34,10 @@ services:
     volumes:
       - ./logs/auth:/usr/local/logs
       - ./data/auth:/usr/local/data
-
+    restart: unless-stopped
 
   drive:
-    image:  ghcr.io/wcherry/neutrino.app/drive:sha-45769fc
+    image:  ghcr.io/wcherry/neutrino.app/drive:latest
     container_name: neutrino-drive-service
     networks:
       - neutrino-net
@@ -55,8 +54,29 @@ services:
     volumes:
       - ./logs/drive:/usr/local/logs
       - ./data/drive:/usr/local/data
-    
+    restart: unless-stopped
+
+  docs:
+    image: ghcr.io/wcherry/neutrino.app/docs:latest
+    container_name: neutrino-docs-service
+    networks:
+      - neutrino-net
+    environment:
+      JWT_SECRET: your-secret-key-here-change-in-production
+      JWT_ACCESS_EXPIRY_SECS: 900
+      JWT_REFRESH_EXPIRY_SECS: 604800
+      LOG_LEVEL: debug
+      AUTH_URL: http://auth:8080/
+      DOCS_DATABASE_URL: /usr/local/data/drive.db
+      DOCS_PORT: 8080
+      LOG_PATH: /usr/local/logs/
+    volumes:
+      - ./logs/docs:/usr/local/logs
+      - ./data/drive:/usr/local/data
+    restart: unless-stopped
 
   worker:
     container_name: neutrino-worker
-    image: ghcr.io/wcherry/neutrino.app/worker:sha-45769fc
+    image: ghcr.io/wcherry/neutrino.app/worker:latest
+    networks:
+      - neutrino-net

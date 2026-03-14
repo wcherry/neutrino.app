@@ -1,0 +1,226 @@
+use crate::common::{ApiError, AuthenticatedUser};
+use crate::docs::{
+    dto::{CreateDocRequest, DocMetaResponse, DocResponse, ExportTextResponse, ListDocsResponse, PageSetup, SaveDocRequest},
+    model::{NewDocRecord, UpdateDocRecord},
+    repository::DocsRepository,
+};
+use crate::drive_client::DriveClient;
+use chrono::Utc;
+use serde_json::Value;
+use std::sync::Arc;
+use uuid::Uuid;
+
+const DEFAULT_PAGE_SETUP: &str = r#"{"marginTop":72,"marginBottom":72,"marginLeft":72,"marginRight":72,"orientation":"portrait","pageSize":"letter"}"#;
+const EMPTY_DOC_CONTENT: &str = r#"{"type":"doc","content":[]}"#;
+
+pub struct DocsService {
+    repo: Arc<DocsRepository>,
+    drive: Arc<DriveClient>,
+}
+
+impl DocsService {
+    pub fn new(repo: Arc<DocsRepository>, drive: Arc<DriveClient>) -> Self {
+        DocsService { repo, drive }
+    }
+
+    pub async fn list_docs(&self, user: &AuthenticatedUser) -> Result<ListDocsResponse, ApiError> {
+        let items = self.drive.list_docs(&user.token).await?;
+        let docs = items
+            .into_iter()
+            .map(|item| DocMetaResponse {
+                id: item.id,
+                title: item.name,
+                folder_id: item.folder_id,
+                created_at: item.created_at.and_utc().to_rfc3339(),
+                updated_at: item.updated_at.and_utc().to_rfc3339(),
+            })
+            .collect();
+        Ok(ListDocsResponse { docs })
+    }
+
+    pub async fn create_doc(
+        &self,
+        user: &AuthenticatedUser,
+        req: CreateDocRequest,
+    ) -> Result<DocResponse, ApiError> {
+        let title = req.title.trim().to_string();
+        if title.is_empty() {
+            return Err(ApiError::bad_request("Document title cannot be empty"));
+        }
+        let id = Uuid::new_v4().to_string();
+        let file = self
+            .drive
+            .register_doc(&user.token, &id, &title, req.folder_id.as_deref())
+            .await?;
+        let new_doc = NewDocRecord {
+            file_id: &id,
+            page_setup: DEFAULT_PAGE_SETUP,
+        };
+        self.repo.insert_doc(new_doc)?;
+
+        // Upload initial empty content to drive storage
+        self.drive
+            .upload_doc_content(&user.token, &id, EMPTY_DOC_CONTENT)
+            .await?;
+
+        let page_setup = default_page_setup();
+        Ok(DocResponse {
+            id: file.id,
+            title: file.name,
+            content: EMPTY_DOC_CONTENT.to_string(),
+            page_setup,
+            folder_id: file.folder_id,
+            created_at: file.created_at.and_utc().to_rfc3339(),
+            updated_at: file.updated_at.and_utc().to_rfc3339(),
+        })
+    }
+
+    pub async fn get_doc(
+        &self,
+        user: &AuthenticatedUser,
+        doc_id: &str,
+    ) -> Result<DocResponse, ApiError> {
+        let file = self.drive.get_file(&user.token, doc_id).await?;
+        if file.deleted_at.is_some() {
+            return Err(ApiError::not_found("Document is in trash"));
+        }
+        let doc = self.repo.get_doc(doc_id)?;
+        let file = self.drive.get_file(&user.token, doc_id).await?;
+        let content = match file.storage_path {
+            Some(_) => self.drive.get_doc_content(&user.token, doc_id).await?,
+            None => "".to_string(),
+        };
+        let page_setup = serde_json::from_str::<PageSetup>(&doc.page_setup)
+            .unwrap_or_else(|_| default_page_setup());
+        Ok(DocResponse {
+            id: file.id,
+            title: file.name,
+            content,
+            page_setup,
+            folder_id: file.folder_id,
+            created_at: file.created_at.and_utc().to_rfc3339(),
+            updated_at: file.updated_at.and_utc().to_rfc3339(),
+        })
+    }
+
+    pub async fn save_doc(
+        &self,
+        user: &AuthenticatedUser,
+        doc_id: &str,
+        req: SaveDocRequest,
+    ) -> Result<DocMetaResponse, ApiError> {
+        let file = self.drive.get_file(&user.token, doc_id).await?;
+        match file.your_role.as_str() {
+            "owner" | "editor" => {}
+            _ => return Err(ApiError::new(403, "FORBIDDEN", "Edit access required")),
+        }
+        if file.deleted_at.is_some() {
+            return Err(ApiError::not_found("Document is in trash"));
+        }
+
+        let new_title = if let Some(ref title) = req.title {
+            let trimmed = title.trim().to_string();
+            if !trimmed.is_empty() {
+                self.drive.update_file_name(&user.token, doc_id, &trimmed).await?;
+                trimmed
+            } else {
+                file.name.clone()
+            }
+        } else {
+            file.name.clone()
+        };
+
+        // Upload new content to drive if provided
+        if let Some(ref content) = req.content {
+            self.drive
+                .upload_doc_content(&user.token, doc_id, content)
+                .await?;
+        }
+
+        let new_page_setup = req
+            .page_setup
+            .as_ref()
+            .and_then(|ps| serde_json::to_string(ps).ok());
+
+        let now = Utc::now().naive_utc();
+        let changes = UpdateDocRecord {
+            page_setup: new_page_setup,
+            updated_at: now,
+        };
+        self.repo.update_doc(doc_id, changes)?;
+
+        Ok(DocMetaResponse {
+            id: file.id,
+            title: new_title,
+            folder_id: file.folder_id,
+            created_at: file.created_at.and_utc().to_rfc3339(),
+            updated_at: now.and_utc().to_rfc3339(),
+        })
+    }
+
+    pub async fn export_text(
+        &self,
+        user: &AuthenticatedUser,
+        doc_id: &str,
+    ) -> Result<ExportTextResponse, ApiError> {
+        let file = self.drive.get_file(&user.token, doc_id).await?;
+        if file.deleted_at.is_some() {
+            return Err(ApiError::not_found("Document is in trash"));
+        }
+        let content = self.drive.get_doc_content(&user.token, doc_id).await?;
+        let text = extract_text_from_tiptap_json(&content);
+        let word_count = count_words(&text);
+        let char_count = text.chars().count() as u32;
+        Ok(ExportTextResponse {
+            text,
+            word_count,
+            char_count,
+        })
+    }
+}
+
+fn default_page_setup() -> PageSetup {
+    PageSetup {
+        margin_top: 72.0,
+        margin_bottom: 72.0,
+        margin_left: 72.0,
+        margin_right: 72.0,
+        orientation: "portrait".to_string(),
+        page_size: "letter".to_string(),
+    }
+}
+
+fn extract_text_from_tiptap_json(json_str: &str) -> String {
+    let Ok(val) = serde_json::from_str::<Value>(json_str) else {
+        return String::new();
+    };
+    let mut out = String::new();
+    collect_text(&val, &mut out);
+    out
+}
+
+fn collect_text(val: &Value, out: &mut String) {
+    match val {
+        Value::Object(map) => {
+            if map.get("type").and_then(|t| t.as_str()) == Some("text") {
+                if let Some(text) = map.get("text").and_then(|t| t.as_str()) {
+                    out.push_str(text);
+                }
+            }
+            if let Some(content) = map.get("content") {
+                collect_text(content, out);
+                out.push('\n');
+            }
+        }
+        Value::Array(arr) => {
+            for item in arr {
+                collect_text(item, out);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn count_words(text: &str) -> u32 {
+    text.split_whitespace().count() as u32
+}

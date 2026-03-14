@@ -108,20 +108,20 @@ A phased roadmap for building a Google Drive-competitive cloud storage and colla
 **Goal:** Users can create and edit documents, spreadsheets, and presentations natively inside Neutrino.
 
 ### 3.1 Docs (Word Processor)
-- [ ] Rich text editor: bold, italic, underline, headings, fonts, font sizes, colors
-- [ ] Lists (bulleted, numbered, nested)
-- [ ] Tables (insert, resize, merge cells)
-- [ ] Images and media insertion
-- [ ] Headers, footers, and footnotes
-- [ ] Page setup: margins, orientation, page size
-- [ ] Columns layout
-- [ ] Document outline (heading-based navigation)
-- [ ] Table of contents auto-generation
-- [ ] Spell check and grammar suggestions
-- [ ] Word count
-- [ ] Export: DOCX, PDF, ODT, TXT, HTML
-- [ ] Import: DOCX, RTF, ODT (up to 50 MB for conversion)
-- [ ] Document size limit: ~1.02 million characters
+- [x] Rich text editor: bold, italic, underline, headings, fonts, font sizes, colors
+- [x] Lists (bulleted, numbered, nested)
+- [x] Tables (insert, resize, merge cells)
+- [x] Images and media insertion
+- [x] Headers, footers, and footnotes
+- [x] Page setup: margins, orientation, page size
+- [x] Columns layout
+- [x] Document outline (heading-based navigation)
+- [x] Table of contents auto-generation
+- [x] Spell check and grammar suggestions
+- [x] Word count
+- [x] Export: DOCX, PDF, ODT, TXT, HTML
+- [x] Import: DOCX, RTF, ODT (up to 50 MB for conversion)
+- [x] Document size limit: ~1.02 million characters
 
 ### 3.2 Sheets (Spreadsheet)
 - [ ] Spreadsheet grid: rows, columns, merged cells
@@ -155,6 +155,19 @@ A phased roadmap for building a Google Drive-competitive cloud storage and colla
 - [ ] In-editor revision history (view, restore, name versions)
 - [ ] Templates gallery (Docs: resume, letter; Sheets: budget, invoice; Slides: pitch deck, etc.)
 - [ ] Offline editing via service worker / browser cache (Chrome/Edge)
+
+### 3.5 Photos (Media Library)
+- [ ] Dedicated Photos section: separate from Drive file browser, infinite-scroll grid by capture date
+- [ ] Auto backup: mobile apps upload camera roll automatically (Wi-Fi only or cellular, user-configurable)
+- [ ] Supported formats: JPEG, PNG, GIF, WebP, HEIC, RAW (common camera formats), MP4, MOV, AVI, WebM
+- [ ] Albums: create manual albums; auto-albums for trips (location + date), events, and favorites
+- [ ] Favorites: star photos/videos to collect in a "Favorites" album
+- [ ] Archive: move items out of main stream without deleting
+- [ ] Trash: 60-day retention before permanent deletion
+- [ ] Shared albums: collaborative albums where multiple users can add photos and leave comments/likes
+- [ ] Shared library: grant a trusted contact access to your full library (or a subset by person/date)
+- [ ] Link sharing: share individual photos or albums via link; control whether recipients can save
+- [ ] Export: download original-quality library via bulk export (ZIP)
 
 ---
 
@@ -198,7 +211,28 @@ A phased roadmap for building a Google Drive-competitive cloud storage and colla
 
 **Goal:** Users have native access to Neutrino on desktop OS and mobile devices.
 
-### 5.1 Desktop Sync Client (Windows & macOS)
+### 5.1 Mobile App — Drive (Android & iOS)
+- [ ] Browse files and folders (list and grid view)
+- [ ] Upload files from device camera roll or file system
+- [ ] Download files for offline access
+- [ ] Mark files "Available offline" (toggle per file or folder)
+- [ ] Offline filter: view all offline-ready files
+- [ ] Document scanning: use camera to scan paper docs into searchable PDF (OCR)
+- [ ] File preview: images, video, PDF on mobile
+- [ ] Share files via link or email from mobile
+- [ ] Set permissions from mobile share dialog
+- [ ] Open file in external apps ("Open with")
+- [ ] Push notifications: comments, mentions, new shares, access requests
+- [ ] Search Drive with voice input
+- [ ] Biometric login
+
+### 5.2 Mobile Editors (Android & iOS)
+- [ ] Docs app: format text, insert images, comments, suggest mode
+- [ ] Sheets app: edit cells, formulas, sort/filter, chart view
+- [ ] Slides app: edit text, reorder slides, add images, present mode
+- [ ] Offline editing in all three apps; sync on reconnect
+
+### 5.3 Desktop Sync Client (Windows & macOS)
 - [ ] Native installer (Windows .exe, macOS .dmg)
 - [ ] Mount Drive as a virtual drive in Finder/Explorer
 - [ ] **Stream mode:** files are cloud-only, downloaded on demand; offline-mark specific files
@@ -213,31 +247,11 @@ A phased roadmap for building a Google Drive-competitive cloud storage and colla
 - [ ] Sync status indicators (cloud icon = online-only, green check = offline-ready)
 - [ ] System tray icon with sync status and quick actions
 
-### 5.2 Mobile App — Drive (Android & iOS)
-- [ ] Browse files and folders (list and grid view)
-- [ ] Upload files from device camera roll or file system
-- [ ] Download files for offline access
-- [ ] Mark files "Available offline" (toggle per file or folder)
-- [ ] Offline filter: view all offline-ready files
-- [ ] Document scanning: use camera to scan paper docs into searchable PDF (OCR)
-- [ ] File preview: images, video, PDF on mobile
-- [ ] Share files via link or email from mobile
-- [ ] Set permissions from mobile share dialog
-- [ ] Open file in external apps ("Open with")
-- [ ] Push notifications: comments, mentions, new shares, access requests
-- [ ] Search Drive with voice input
-
-### 5.3 Mobile Editors (Android & iOS)
-- [ ] Docs app: format text, insert images, comments, suggest mode
-- [ ] Sheets app: edit cells, formulas, sort/filter, chart view
-- [ ] Slides app: edit text, reorder slides, add images, present mode
-- [ ] Offline editing in all three apps; sync on reconnect
-
 ---
 
-## Phase 6 — Search & AI Features
+## Phase 6 — AI and Advanced Features
 
-**Goal:** Users can find files instantly and get intelligent assistance inside their documents and Drive.
+**Goal:** Users can find files instantly and get intelligent assistance inside their documents and Drive. Adds advanced features to apps.
 
 ### 6.1 Search Infrastructure
 - [ ] Full-text indexing: index content of Docs, Sheets, Slides
@@ -278,6 +292,19 @@ A phased roadmap for building a Google Drive-competitive cloud storage and colla
 - [ ] "Catch me up" on Drive home: summarize recent changes across all files
 - [ ] AI-powered content classification: automatically label sensitive files
 - [ ] Answer questions about Drive content without opening files
+
+### 6.7 Google Photo Advanced Feautures
+- [ ] Photo map: browse media by GPS location on an interactive map
+- [ ] Non-destructive editing: brightness, contrast, saturation, warmth, highlights, shadows, crop, rotate, filters; original always preserved and restorable
+- [ ] Video editing: trim, stabilize, mute audio; export edited clip
+- [ ] Semantic search: search by object, place, date range, or activity without manual tagging
+- [ ] Memories: "On this day" highlights, year-in-review, and themed collages surfaced automatically
+- [ ] Locked folder: PIN/biometric-protected private space excluded from backups and search
+- [ ] Location privacy: strip GPS metadata before sharing; disable location in shared links
+- [ ] Free up space: identify backed-up photos and offer to delete local device copies
+
+### 6.8 Google Docs Advanced Features
+- [ ] Template support: Can create, edit, use, and select a default template
 
 ---
 

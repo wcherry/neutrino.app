@@ -78,6 +78,71 @@ A comprehensive breakdown of Google Drive’s features (core storage, file manag
 - **Offline:** Slides can be edited offline (web offline mode)【25†L49-L57】 and on mobile (choose slides to keep offline).  
 - **Templates:** Diverse slide templates for business, education, etc., accessible from creation menu.  
 
+## Google Photos – Feature Map
+### Storage & Upload
+- **Supported Media Types:** JPEG, PNG, GIF, WebP, HEIC, RAW (many camera formats), BMP, TIFF for photos; MP4, MOV, AVI, MKV, WebM and many more for video. Maximum video length: up to 10 GB per file.
+- **Auto Backup / Sync:** Mobile apps automatically upload new photos/videos in the background (configurable). Backup over Wi-Fi only or cellular. Desktop Uploader app for Mac/Windows batch imports local photos libraries.
+- **Bulk Upload & Import:** Drag-and-drop on the web. Import from partner apps.
+
+### AI & Smart Organization
+- **Face Grouping:** Automatically clusters photos by recognized faces (people). Users label faces to organize by person. Works without manual tagging.
+- **Subject & Scene Recognition:** Automatically tags photos with objects, places, activities (pets, food, sunsets, beaches, receipts, documents). Enables search by content without any user tagging.
+- **Memory Highlights:** Surfaces "On this day" albums, year-in-review movies, seasonal highlights, and themed collages. Proactively reminds users of past moments.
+- **Google Lens Integration:** Tap any photo to run Lens — identifies landmarks, plants, animals, products, text (OCR), and more. Copy text directly from photos.
+- **Smart Albums:** Auto-creates albums for trips (grouped by location + date), events, animated GIFs, collages, movies, and shared libraries.
+- **Semantic Search:** Search by object ("red car"), person (by face label), place ("Paris"), date range, activity ("hiking"), or combined queries. No manual tagging required.
+
+### Editing
+- **One-Tap Enhancements:** Auto-enhance exposure, color, and sharpness with one tap. Suggested edits based on photo content.
+- **Adjustment Tools:** Manual sliders for brightness, contrast, saturation, warmth, tint, highlights, shadows, sharpness, vignette, grain. Crop and rotate (with auto-straighten). Perspective correction.
+- **Filters:** Curated filter sets with intensity control.
+- **Photo Unblur:** AI-powered deblurring for slightly out-of-focus photos (Pixel-first, rolling out broadly).
+- **Magic Eraser & Camouflage:** Remove unwanted objects or people from photos. Camouflage blends erased area with surrounding colors/patterns.
+- **Portrait Light & Blur:** Adjust background blur (bokeh) and relighting after the fact. Add or shift portrait lighting on faces.
+- **Video Editing:** Trim, stabilize, rotate video clips. Adjust brightness/contrast/color for video. Mute or adjust audio. Export edited video.
+- **Non-Destructive Edits:** All edits are non-destructive; original is always preserved and restorable.
+
+### Albums & Collections
+- **Manual Albums:** Create named albums and add any photos/videos. Albums can be shared or private.
+- **Auto Albums:** Photos auto-categorizes trips, events, and themed collections (e.g. "screenshots", "receipts", "documents").
+- **Favorites:** Star photos to collect in a "Favorites" album.
+- **Archive:** Move photos to an Archive to keep them but remove from main photo stream.
+- **Locked Folder:** PIN or biometric-protected private space for sensitive photos; contents excluded from backups and Google services.
+- **Trash:** Deleted items remain in trash for 60 days before permanent deletion.
+- **Photo Map:** Visual map view — browse photos by the location they were taken (GPS metadata or inferred).
+
+### Sharing
+- **Direct Share:** Share individual photos or albums via Google Photos link, email, or directly to contacts. Recipients do not need a Google account to view.
+- **Shared Albums:** Collaborative albums where multiple people can add photos and comments. Optional: allow contributors to add photos.
+- **Shared Library:** Grant a trusted contact access to your entire photo library (or a subset filtered by person/date). Auto-share new photos with them.
+- **Partner Sharing:** Automatically share photos with one partner (filtered by face labels), so each person sees both libraries without manual effort.
+- **Comments & Likes:** On shared albums, collaborators can react with emoji likes and leave text comments on individual photos.
+- **Link Sharing Controls:** Shared links can be set to allow others to save photos or be view-only. Links can be disabled at any time.
+- **Save from Shares:** Recipients of shared albums can save individual photos to their own library.
+
+### Privacy & Safety
+- **Locked Folder:** Locally stored, encrypted photos hidden from main stream, backups, and Google services.
+- **Sensitive Content Filtering:** Option to blur potentially sensitive content in shared albums.
+- **Face Recognition Controls:** Users can disable face grouping. Face recognition is done on-device or in Google’s secure environment; Google states it is not used for ads targeting.
+- **Location Removal:** Strip GPS metadata from photos before sharing. Option to disable location data in shared links.
+- **Account Permissions:** Manage which third-party apps have access to Photos via Google Account settings.
+- **Takeout:** Export entire photo library (original quality) via Google Takeout in ZIP archives.
+
+### Web Interface
+- **Browsing:** Infinite scroll by date. Year/month jump navigation. Toggle between compact and comfortable grid density.
+- **Editing:** Full editor available on web (same tools as mobile).
+- **Album Management:** Create, reorder, rename, and delete albums. Drag photos between albums.
+- **Search:** Full semantic and face-based search on web. Filter by date, album, type (video, Live Photos, etc.).
+- **Print Store:** Order prints, photo books, canvas prints, and other products directly from Google Photos.
+
+### Mobile (Android/iOS)
+- **Camera Integration:** One-tap launch to camera. Photo Sphere and panorama supported.
+- **Assistant Cards:** Proactive suggestions (create movie, share a memory, free up space) surfaced in the "Library" tab.
+- **Free Up Space:** Identifies photos safely backed up and offers to delete local copies to reclaim device storage.
+- **Offline Browsing:** Recently viewed photos are available offline (cached). Backed-up thumbnails visible offline.
+- **Widget:** Home screen widget shows recent or curated memories.
+- **Live Photos / Motion Photos:** Playback and editing of Apple Live Photos (iOS) and Google Motion Photos (Android). Can extract still or video portion.
+
 ## Google Drive (Desktop Client)  
 - **Drive for Desktop App:** Native app for Windows/macOS that syncs Drive with a local folder or virtual drive. Installed via download.  
 - **Streaming Mode:** Only selected files download on demand; others appear as placeholders to save disk space【31†L31-L39】. Access when online, or mark specific files for offline.  
@@ -148,6 +213,6 @@ A comprehensive breakdown of Google Drive’s features (core storage, file manag
 - **Shortcuts & Linking:** “Add shortcut” allows linking files into multiple folders. Files can link to Google Calendar, Chat, Gmail, etc.  
 - **Shared Drives Analytics:** Shared drives show storage used and who’s contributed files. Team Drives can be locked for add-only by some members.  
 
-## Summary  
-Together, these features encompass Google Drive’s ecosystem for storage, file management, real-time collaboration, and integration. Google’s official documentation and blog posts confirm these capabilities【47†L599-L602】【35†L149-L158】【23†L89-L98】【25†L49-L57】【1†L54-L61】. This map outlines the granular feature set one would find in a Drive competitor’s PRD. 
+## Summary
+Together, these features encompass Google Drive’s ecosystem for storage, file management, real-time collaboration, and integration. Google’s official documentation and blog posts confirm these capabilities【47†L599-L602】【35†L149-L158】【23†L89-L98】【25†L49-L57】【1†L54-L61】. This map outlines the granular feature set one would find in a Drive competitor’s PRD.
 

@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "auth",
+    "docs",
     "drive",
     "shared",
     "worker",

@@ -51,26 +51,27 @@ impl StorageRepository {
         let order_by = query.order_by.unwrap_or(FileOrderField::CreatedAt);
         let direction = query.direction.unwrap_or(OrderDirection::Desc);
 
-        macro_rules! load_ordered {
-            ($col:expr) => {{
-                let base = files::table
-                    .filter(files::user_id.eq(user_id))
-                    .filter(files::is_trashed.eq(false))
-                    .select(FileRecord::as_select())
-                    .limit(query.limit)
-                    .offset(query.offset);
-                match direction {
-                    OrderDirection::Asc => base.order($col.asc()).load(&mut conn),
-                    OrderDirection::Desc => base.order($col.desc()).load(&mut conn),
-                }
-            }};
+        let mut base = files::table
+            .filter(files::user_id.eq(user_id))
+            .filter(files::deleted_at.is_null())
+            .select(FileRecord::as_select())
+            .limit(query.limit)
+            .offset(query.offset)
+            .into_boxed();
+
+        if let Some(mt) = query.filters.get("mimeType") {
+            base = base.filter(files::mime_type.eq(mt.clone()));
         }
 
-        let result = match order_by {
-            FileOrderField::Name => load_ordered!(files::name),
-            FileOrderField::Size => load_ordered!(files::size_bytes),
-            FileOrderField::CreatedAt => load_ordered!(files::created_at),
-            FileOrderField::UpdatedAt => load_ordered!(files::updated_at),
+        let result = match (order_by, direction) {
+            (FileOrderField::Name, OrderDirection::Asc) => base.order(files::name.asc()).load(&mut conn),
+            (FileOrderField::Name, OrderDirection::Desc) => base.order(files::name.desc()).load(&mut conn),
+            (FileOrderField::Size, OrderDirection::Asc) => base.order(files::size_bytes.asc()).load(&mut conn),
+            (FileOrderField::Size, OrderDirection::Desc) => base.order(files::size_bytes.desc()).load(&mut conn),
+            (FileOrderField::CreatedAt, OrderDirection::Asc) => base.order(files::created_at.asc()).load(&mut conn),
+            (FileOrderField::CreatedAt, OrderDirection::Desc) => base.order(files::created_at.desc()).load(&mut conn),
+            (FileOrderField::UpdatedAt, OrderDirection::Asc) => base.order(files::updated_at.asc()).load(&mut conn),
+            (FileOrderField::UpdatedAt, OrderDirection::Desc) => base.order(files::updated_at.desc()).load(&mut conn),
         };
 
         result.map_err(|e| {

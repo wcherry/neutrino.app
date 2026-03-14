@@ -14,8 +14,7 @@ pub struct FolderRecord {
     pub name: String,
     pub is_starred: bool,
     pub color: Option<String>,
-    pub is_trashed: bool,
-    pub trashed_at: Option<NaiveDateTime>,
+    pub deleted_at: Option<NaiveDateTime>,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
 }
@@ -42,8 +41,7 @@ pub struct UpdateFolderRecord {
 #[derive(Debug, AsChangeset)]
 #[diesel(table_name = crate::schema::folders)]
 pub struct TrashFolderRecord {
-    pub is_trashed: bool,
-    pub trashed_at: Option<NaiveDateTime>,
+    pub deleted_at: Option<NaiveDateTime>,
     pub updated_at: NaiveDateTime,
 }
 

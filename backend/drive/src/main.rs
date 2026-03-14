@@ -212,7 +212,7 @@ async fn main() -> std::io::Result<()> {
     let access_requests_service = Arc::new(AccessRequestsService::new(
         access_requests_repo,
         permissions_repo,
-        permissions_service,
+        permissions_service.clone(),
     ));
     let access_requests_state = web::Data::new(AccessRequestsApiState {
         service: access_requests_service,

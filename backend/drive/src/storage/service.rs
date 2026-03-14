@@ -5,7 +5,7 @@ use crate::storage::{
         FileMetadataResponse, FileOrderField, FileVersionResponse, ListFilesResponse,
         ListVersionsResponse, QuotaResponse, VersionOrderField,
     },
-    model::{NewFileRecord, NewFileVersionRecord, UpdateFileContent},
+    model::{FileRecord, NewFileRecord, NewFileVersionRecord, UpdateFileContent},
     repository::StorageRepository,
     store::LocalFileStore,
 };
@@ -15,6 +15,8 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 const MAX_VERSIONS: i64 = 100;
+
+pub const DOC_MIME_TYPE: &str = "application/x-neutrino-doc";
 
 pub struct StorageService {
     repo: Arc<StorageRepository>,
@@ -115,27 +117,29 @@ impl StorageService {
 
     /// Upload a new version of an existing file. Replaces the file's current content
     /// and appends a new version record. Prunes oldest version when limit is exceeded.
+    /// Permission check (owner/editor) must be enforced by the caller before calling this.
     pub fn upload_new_version(
         &self,
-        user_id: &str,
         file_id: &str,
         temp_path: &Path,
         size_bytes: i64,
     ) -> Result<FileVersionResponse, ApiError> {
         let file = self
             .repo
-            .find_file(file_id, user_id)?
+            .find_file_by_id(file_id)?
             .ok_or_else(|| ApiError::not_found("File not found"))?;
+
+        let owner_id = &file.user_id;
 
         // If the file has no version history yet, snapshot the current content as v1
         let existing_count = self.repo.count_versions(file_id)?;
         if existing_count == 0 {
             let current_path = self.store.resolve(&file.storage_path);
-            self.create_version_snapshot(user_id, file_id, &current_path, file.size_bytes, 1);
+            self.create_version_snapshot(owner_id, file_id, &current_path, file.size_bytes, 1);
         }
 
-        // Overwrite the main file with new content
-        let main_path = self.store.file_path(user_id, file_id);
+        // Overwrite the main file with new content (always under owner's directory)
+        let main_path = self.store.file_path(owner_id, file_id);
         std::fs::rename(temp_path, &main_path).map_err(|e| {
             tracing::error!("Failed to move new version to main path: {:?}", e);
             ApiError::internal("Failed to save new version")
@@ -145,10 +149,10 @@ impl StorageService {
         let now = Utc::now().naive_utc();
         self.repo.update_file_content(
             file_id,
-            user_id,
+            owner_id,
             UpdateFileContent {
                 size_bytes,
-                storage_path: self.store.file_key(user_id, file_id),
+                storage_path: self.store.file_key(owner_id, file_id),
                 updated_at: now,
             },
         )?;
@@ -156,7 +160,7 @@ impl StorageService {
         // Create snapshot of the new content as version N
         let next_num = self.repo.max_version_number(file_id)? + 1;
         let version = self
-            .create_version_snapshot_record(user_id, file_id, &main_path, size_bytes, next_num)?;
+            .create_version_snapshot_record(owner_id, file_id, &main_path, size_bytes, next_num)?;
 
         // Prune to MAX_VERSIONS
         let total = self.repo.count_versions(file_id)?;
@@ -385,6 +389,33 @@ impl StorageService {
 
     pub fn store(&self) -> &LocalFileStore {
         &self.store
+    }
+
+    pub async fn register_doc_file(
+        &self,
+        user: &AuthenticatedUser,
+        file_id: &str,
+        name: &str,
+        folder_id: Option<&str>,
+    ) -> Result<FileRecord, ApiError> {
+        let new_file = NewFileRecord {
+            id: file_id,
+            user_id: &user.user_id,
+            name,
+            size_bytes: 0,
+            mime_type: DOC_MIME_TYPE,
+            storage_path: "",
+            folder_id,
+        };
+        let file = self.repo.insert_file(new_file)?;
+        if let Err(e) = self.permissions.grant_ownership(user, "file", file_id).await {
+            tracing::error!("Failed to grant ownership for doc {}: {:?}", file_id, e);
+        }
+        Ok(file)
+    }
+
+    pub fn find_file_any_user(&self, file_id: &str) -> Result<Option<FileRecord>, ApiError> {
+        self.repo.find_file_by_id(file_id)
     }
 
     // ── Private helpers ────────────────────────────────────────────────────────

@@ -29,10 +29,18 @@ jobs:
             context: ./backend
             dockerfile: ./backend/Dockerfile
             build_args: SERVICE=drive
+          - image: docs
+            context: ./backend
+            dockerfile: ./backend/Dockerfile
+            build_args: SERVICE=docs
           - image: worker
             context: ./backend
             dockerfile: ./backend/Dockerfile
             build_args: SERVICE=worker
+          - image: neutrino
+            context: .
+            dockerfile: ./Dockerfile.combined
+            build_args: ""
 
     steps:
       - name: Checkout

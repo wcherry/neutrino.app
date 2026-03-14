@@ -9,8 +9,7 @@ diesel::table! {
         name -> Text,
         is_starred -> Bool,
         color -> Nullable<Text>,
-        is_trashed -> Bool,
-        trashed_at -> Nullable<Timestamp>,
+        deleted_at -> Nullable<Timestamp>,
         created_at -> Timestamp,
         updated_at -> Timestamp,
     }
@@ -29,8 +28,7 @@ diesel::table! {
         // Added in migration 005
         folder_id -> Nullable<Text>,
         is_starred -> Bool,
-        is_trashed -> Bool,
-        trashed_at -> Nullable<Timestamp>,
+        deleted_at -> Nullable<Timestamp>,
     }
 }
 
