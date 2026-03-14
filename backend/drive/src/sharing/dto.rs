@@ -152,4 +152,9 @@ pub struct ResolvedShareLinkResponse {
     pub expires_at: Option<String>,
     /// Basic resource info
     pub resource_name: String,
+    /// When true, the workspace requires authenticated org-domain users to access this link.
+    /// The client should enforce this by checking the authenticated user's email domain.
+    pub domain_only: bool,
+    /// The required organization domain when domain_only is true (e.g. "acme.com").
+    pub allowed_domain: Option<String>,
 }

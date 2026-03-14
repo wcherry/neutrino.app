@@ -7,6 +7,7 @@ use crate::sharing::{
     model::{NewShareLinkRecord, UpdateShareLinkRecord},
     repository::SharingRepository,
 };
+use crate::workspace::service::WorkspaceService;
 use crate::common::ApiError;
 use chrono::{NaiveDateTime, Utc};
 use std::sync::Arc;
@@ -15,11 +16,16 @@ use uuid::Uuid;
 pub struct SharingService {
     repo: Arc<SharingRepository>,
     permissions: Arc<PermissionsService>,
+    workspace: Arc<WorkspaceService>,
 }
 
 impl SharingService {
-    pub fn new(repo: Arc<SharingRepository>, permissions: Arc<PermissionsService>) -> Self {
-        SharingService { repo, permissions }
+    pub fn new(
+        repo: Arc<SharingRepository>,
+        permissions: Arc<PermissionsService>,
+        workspace: Arc<WorkspaceService>,
+    ) -> Self {
+        SharingService { repo, permissions, workspace }
     }
 
     pub fn get_share_link(
@@ -42,6 +48,8 @@ impl SharingService {
         req: UpsertShareLinkRequest,
     ) -> Result<ShareLinkResponse, ApiError> {
         self.require_owner(caller_id, resource_type, resource_id)?;
+        // Check workspace policy: block external link sharing if configured
+        self.workspace.check_link_sharing_allowed()?;
 
         let expires_at = req
             .expires_at
@@ -138,6 +146,13 @@ impl SharingService {
             .get_resource_name(&link.resource_type, &link.resource_id)?
             .unwrap_or_else(|| link.resource_id.clone());
 
+        let domain_only = self.workspace.is_domain_only_links()?;
+        let allowed_domain = if domain_only {
+            self.workspace.get_allowed_domain()?
+        } else {
+            None
+        };
+
         Ok(ResolvedShareLinkResponse {
             resource_type: link.resource_type,
             resource_id: link.resource_id,
@@ -145,6 +160,8 @@ impl SharingService {
             visibility: link.visibility,
             expires_at: link.expires_at.map(|dt| dt.to_string()),
             resource_name,
+            domain_only,
+            allowed_domain,
         })
     }
 

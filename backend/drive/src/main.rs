@@ -11,11 +11,13 @@ use actix_cors::Cors;
 mod access_requests;
 mod config;
 mod filesystem;
+mod irm;
 mod permissions;
 mod schema;
 mod common;
 mod sharing;
 mod storage;
+mod workspace;
 
 use crate::access_requests::{
     api::{AccessRequestsApiDoc, AccessRequestsApiState},
@@ -27,6 +29,11 @@ use crate::filesystem::{
     api::{FilesystemApiDoc, FilesystemApiState},
     repository::FilesystemRepository,
     service::FilesystemService,
+};
+use crate::irm::{
+    api::{IrmApiDoc, IrmApiState},
+    repository::IrmRepository,
+    service::IrmService,
 };
 use crate::permissions::{
     api::{PermissionsApiDoc, PermissionsApiState},
@@ -44,6 +51,11 @@ use crate::storage::{
     repository::StorageRepository,
     service::StorageService,
     store::LocalFileStore,
+};
+use crate::workspace::{
+    api::{WorkspaceApiDoc, WorkspaceApiState},
+    repository::WorkspaceRepository,
+    service::WorkspaceService,
 };
 
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
@@ -133,11 +145,28 @@ async fn main() -> std::io::Result<()> {
         }),
     );
 
+    // Workspace settings (no dependencies — created first so others can use it)
+    let workspace_repo = Arc::new(WorkspaceRepository::new(pool.clone()));
+    let workspace_service = Arc::new(WorkspaceService::new(workspace_repo));
+    let workspace_state = web::Data::new(WorkspaceApiState {
+        workspace_service: workspace_service.clone(),
+    });
+
     // Permissions setup (shared across storage and filesystem)
     let permissions_repo = Arc::new(PermissionsRepository::new(pool.clone()));
-    let permissions_service = Arc::new(PermissionsService::new(permissions_repo.clone()));
+    let permissions_service = Arc::new(PermissionsService::new(
+        permissions_repo.clone(),
+        workspace_service.clone(),
+    ));
     let permissions_state = web::Data::new(PermissionsApiState {
         permissions_service: permissions_service.clone(),
+    });
+
+    // IRM setup
+    let irm_repo = Arc::new(IrmRepository::new(pool.clone()));
+    let irm_service = Arc::new(IrmService::new(irm_repo, permissions_service.clone()));
+    let irm_state = web::Data::new(IrmApiState {
+        irm_service: irm_service.clone(),
     });
 
     let storage_repo = Arc::new(StorageRepository::new(pool.clone()));
@@ -149,6 +178,8 @@ async fn main() -> std::io::Result<()> {
 
     let storage_state = web::Data::new(StorageApiState {
         storage_service: storage_service.clone(),
+        irm_service: irm_service.clone(),
+        permissions_service: permissions_service.clone(),
     });
 
     // Filesystem setup
@@ -166,9 +197,14 @@ async fn main() -> std::io::Result<()> {
 
     // Sharing setup
     let sharing_repo = Arc::new(SharingRepository::new(pool.clone()));
-    let sharing_service = Arc::new(SharingService::new(sharing_repo, permissions_service.clone()));
+    let sharing_service = Arc::new(SharingService::new(
+        sharing_repo,
+        permissions_service.clone(),
+        workspace_service,
+    ));
     let sharing_state = web::Data::new(SharingApiState {
         sharing_service,
+        irm_service,
     });
 
     // Access requests setup
@@ -198,6 +234,8 @@ async fn main() -> std::io::Result<()> {
         openapi.merge(PermissionsApiDoc::openapi());
         openapi.merge(SharingApiDoc::openapi());
         openapi.merge(AccessRequestsApiDoc::openapi());
+        openapi.merge(IrmApiDoc::openapi());
+        openapi.merge(WorkspaceApiDoc::openapi());
         let config = SwaggerConfig::new(vec![
             "http://localhost:8881/api-docs/openapi.json",
             "http://localhost:8882/api-docs/openapi.json"
@@ -211,6 +249,8 @@ async fn main() -> std::io::Result<()> {
             .app_data(permissions_state.clone())
             .app_data(sharing_state.clone())
             .app_data(access_requests_state.clone())
+            .app_data(irm_state.clone())
+            .app_data(workspace_state.clone())
             .app_data(token_service_data.clone())
             .wrap(Logger::default())
             .wrap(Cors::permissive())
@@ -221,11 +261,16 @@ async fn main() -> std::io::Result<()> {
                     .configure(filesystem::api::configure)
                     .configure(permissions::api::configure)
                     .configure(sharing::api::configure_drive)
-                    .configure(access_requests::api::configure),
+                    .configure(access_requests::api::configure)
+                    .configure(irm::api::configure),
             )
             .service(
                 web::scope("/api/v1")
                     .configure(sharing::api::configure_public),
+            )
+            .service(
+                web::scope("/api/v1/admin")
+                    .configure(workspace::api::configure),
             )
             .service(
                 SwaggerUi::new("/swagger-ui/{_:.*}")

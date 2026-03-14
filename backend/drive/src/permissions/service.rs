@@ -7,16 +7,18 @@ use crate::{permissions::{
     repository::PermissionsRepository,
 }, common::{AuthenticatedUser, fetch_auth_profile}};
 use crate::common::ApiError;
+use crate::workspace::service::WorkspaceService;
 use std::sync::Arc;
 use uuid::Uuid;
 
 pub struct PermissionsService {
     repo: Arc<PermissionsRepository>,
+    workspace: Arc<WorkspaceService>,
 }
 
 impl PermissionsService {
-    pub fn new(repo: Arc<PermissionsRepository>) -> Self {
-        PermissionsService { repo }
+    pub fn new(repo: Arc<PermissionsRepository>, workspace: Arc<WorkspaceService>) -> Self {
+        PermissionsService { repo, workspace }
     }
 
     /// Auto-grants Owner role when a resource is created. Called internally by
@@ -86,6 +88,8 @@ impl PermissionsService {
                 "Cannot grant Owner role directly. Use transfer-ownership instead.",
             ));
         }
+        // Check workspace domain restriction before granting
+        self.workspace.check_domain_for_sharing(&req.user_email)?;
         tracing::info!(
             "Sharing notification: granting {} role on {} {} to {} ({})",
             req.role.as_str(), resource_type, resource_id, req.user_email, req.user_id

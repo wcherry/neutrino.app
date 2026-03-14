@@ -1,6 +1,8 @@
 use crate::common::{
     apply_list_query, ApiError, AuthenticatedUser, ListQuery, ListQueryParams, OrderDirection,
 };
+use crate::irm::service::IrmService;
+use crate::permissions::service::PermissionsService;
 use crate::storage::{
     dto::{
         FileMetadataResponse, FileOrderField, FileVersionResponse, ListFilesResponse,
@@ -20,6 +22,8 @@ use uuid::Uuid;
 
 pub struct StorageApiState {
     pub storage_service: Arc<StorageService>,
+    pub irm_service: Arc<IrmService>,
+    pub permissions_service: Arc<PermissionsService>,
 }
 
 #[utoipa::path(
@@ -225,6 +229,23 @@ pub async fn download_file(
         .storage_service
         .resolve_file_path(&user.user_id, &file_id)?;
 
+    // Enforce IRM download restriction based on caller's effective role
+    let role = state
+        .permissions_service
+        .get_effective_role(&user.user_id, "file", &file_id)?;
+    if let Some(role_str) = &role {
+        let restrictions = state
+            .irm_service
+            .get_restrictions("file", &file_id, role_str)?;
+        if restrictions.restrict_download {
+            return Err(ApiError::new(
+                403,
+                "DOWNLOAD_RESTRICTED",
+                "Download is restricted by the file owner's IRM policy",
+            ));
+        }
+    }
+
     let content_type: mime::Mime = mime_type
         .parse()
         .unwrap_or(mime::APPLICATION_OCTET_STREAM);
@@ -270,6 +291,19 @@ pub async fn preview_file(
         .storage_service
         .resolve_file_path(&user.user_id, &file_id)?;
 
+    // Check IRM print/copy restrictions for this user's role
+    let role = state
+        .permissions_service
+        .get_effective_role(&user.user_id, "file", &file_id)?;
+    let restrict_print_copy = if let Some(role_str) = &role {
+        state
+            .irm_service
+            .get_restrictions("file", &file_id, role_str)?
+            .restrict_print_copy
+    } else {
+        false
+    };
+
     let content_type: mime::Mime = mime_type
         .parse()
         .unwrap_or(mime::APPLICATION_OCTET_STREAM);
@@ -287,7 +321,19 @@ pub async fn preview_file(
         .set_content_type(content_type)
         .set_content_disposition(disposition);
 
-    Ok(named_file.into_response(&req))
+    let mut response = named_file.into_response(&req);
+    if restrict_print_copy {
+        let headers = response.headers_mut();
+        headers.insert(
+            actix_web::http::header::HeaderName::from_static("x-irm-restrict-print"),
+            actix_web::http::header::HeaderValue::from_static("true"),
+        );
+        headers.insert(
+            actix_web::http::header::HeaderName::from_static("x-irm-restrict-copy"),
+            actix_web::http::header::HeaderValue::from_static("true"),
+        );
+    }
+    Ok(response)
 }
 
 #[utoipa::path(

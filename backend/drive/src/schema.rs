@@ -115,6 +115,34 @@ diesel::table! {
     }
 }
 
+diesel::table! {
+    irm_policies (id) {
+        id -> Text,
+        resource_type -> Text,
+        resource_id -> Text,
+        restrict_download_viewer -> Bool,
+        restrict_download_commenter -> Bool,
+        restrict_download_editor -> Bool,
+        restrict_print_copy_viewer -> Bool,
+        restrict_print_copy_commenter -> Bool,
+        restrict_print_copy_editor -> Bool,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    workspace_settings (id) {
+        id -> Text,
+        allowed_domain -> Nullable<Text>,
+        restrict_shares_to_domain -> Bool,
+        block_external_link_sharing -> Bool,
+        domain_only_links -> Bool,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
 diesel::joinable!(files -> folders (folder_id));
 diesel::joinable!(shortcuts -> files (target_file_id));
 diesel::joinable!(file_versions -> files (file_id));
@@ -128,4 +156,6 @@ diesel::allow_tables_to_appear_in_same_query!(
     permissions,
     share_links,
     access_requests,
+    irm_policies,
+    workspace_settings,
 );

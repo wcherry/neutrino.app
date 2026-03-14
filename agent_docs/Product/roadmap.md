@@ -84,9 +84,9 @@ A phased roadmap for building a Google Drive-competitive cloud storage and colla
 - [x] Disable link sharing (make access-list-only)
 
 ### 2.3 Information Rights Management (IRM)
-- [ ] Restrict download for Viewer and Commenter roles
-- [ ] Restrict print and copy for Viewer and Commenter roles
-- [ ] Extend download/print/copy restriction to Editor role (admin-controlled)
+- [x] Restrict download for Viewer and Commenter roles
+- [x] Restrict print and copy for Viewer and Commenter roles
+- [x] Extend download/print/copy restriction to Editor role (admin-controlled)
 
 ### 2.4 Sharing UI
 - [x] Share dialog: add people by email, set role
@@ -97,9 +97,9 @@ A phased roadmap for building a Google Drive-competitive cloud storage and colla
 - [x] Owner receives push/email notification for access requests
 
 ### 2.5 Domain Restrictions (Workspace)
-- [ ] Restrict shares to within an organization domain
-- [ ] Block external share from admin console
-- [ ] Domain-only link sharing option
+- [x] Restrict shares to within an organization domain
+- [x] Block external share from admin console
+- [x] Domain-only link sharing option
 
 ---
 

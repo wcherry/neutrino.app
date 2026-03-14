@@ -6,6 +6,7 @@ use crate::sharing::{
     service::SharingService,
 };
 use crate::common::{ApiError, AuthenticatedUser};
+use crate::irm::service::IrmService;
 use crate::storage::api::StorageApiState;
 use actix_files::NamedFile;
 use actix_web::{delete, get, patch, put, web, HttpRequest, HttpResponse};
@@ -14,6 +15,7 @@ use utoipa::OpenApi;
 
 pub struct SharingApiState {
     pub sharing_service: Arc<SharingService>,
+    pub irm_service: Arc<IrmService>,
 }
 
 // ── File share link endpoints ─────────────────────────────────────────────────
@@ -302,6 +304,18 @@ pub async fn download_shared_file(
         return Err(ApiError::bad_request("Share link does not reference a file"));
     }
 
+    // Enforce IRM download restriction based on the share link's role
+    let restrictions = state
+        .irm_service
+        .get_restrictions("file", &resolved.resource_id, &resolved.role)?;
+    if restrictions.restrict_download {
+        return Err(ApiError::new(
+            403,
+            "DOWNLOAD_RESTRICTED",
+            "Download is restricted by the file owner's IRM policy",
+        ));
+    }
+
     let (file_path, mime_type, file_name) = storage_state
         .storage_service
         .resolve_file_path_by_id(&resolved.resource_id)?;
@@ -354,6 +368,11 @@ pub async fn preview_shared_file(
         return Err(ApiError::bad_request("Share link does not reference a file"));
     }
 
+    // Check IRM print/copy restrictions based on the share link's role
+    let restrictions = state
+        .irm_service
+        .get_restrictions("file", &resolved.resource_id, &resolved.role)?;
+
     let (file_path, mime_type, _) = storage_state
         .storage_service
         .resolve_file_path_by_id(&resolved.resource_id)?;
@@ -375,7 +394,19 @@ pub async fn preview_shared_file(
         .set_content_type(content_type)
         .set_content_disposition(disposition);
 
-    Ok(named_file.into_response(&req))
+    let mut response = named_file.into_response(&req);
+    if restrictions.restrict_print_copy {
+        let headers = response.headers_mut();
+        headers.insert(
+            actix_web::http::header::HeaderName::from_static("x-irm-restrict-print"),
+            actix_web::http::header::HeaderValue::from_static("true"),
+        );
+        headers.insert(
+            actix_web::http::header::HeaderName::from_static("x-irm-restrict-copy"),
+            actix_web::http::header::HeaderValue::from_static("true"),
+        );
+    }
+    Ok(response)
 }
 
 pub fn configure_drive(conf: &mut web::ServiceConfig) {
