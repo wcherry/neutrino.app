@@ -9,7 +9,7 @@ COPY Cargo.toml Cargo.lock ./
 COPY shared/ shared/
 COPY auth/Cargo.toml auth/
 COPY drive/Cargo.toml drive/
-COPY docs/Cargo.toml drive/
+COPY docs/Cargo.toml docs/
 COPY worker/Cargo.toml worker/
 
 # Create dummy source files to build dependency cache
