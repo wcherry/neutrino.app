@@ -11,7 +11,7 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY .npmrc ./
 COPY web/package.json web/
 COPY packages/*/package.json packages/*/
-
+COPY patches patches
 # Install dependencies
 RUN pnpm install --prod=false
 

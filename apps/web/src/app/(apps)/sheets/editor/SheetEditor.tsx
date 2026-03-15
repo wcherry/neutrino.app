@@ -363,6 +363,7 @@ function FortuneSheetWorkbook({
   useEffect(() => {
     import('@fortune-sheet/react').then((mod) => {
       // Import the CSS
+      // @ts-expect-error — no type declarations for CSS module
       import('@fortune-sheet/react/dist/index.css').catch(() => {});
       setWorkbook(() => mod.Workbook as WorkbookComponent);
     });
