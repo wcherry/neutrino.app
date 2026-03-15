@@ -23,7 +23,6 @@ import {
   Archive,
   File,
   Clock,
-  Star,
 } from 'lucide-react';
 import { storageApi, filesystemApi, docsApi, type FileItem, type Folder as FolderItem } from '@/lib/api';
 import { useRouter } from 'next/navigation';
@@ -206,7 +205,7 @@ export default function DrivePage() {
     mutationFn: (title: string) => docsApi.createDoc({ title, folderId: currentFolderId }),
     onSuccess: (doc) => {
       queryClient.invalidateQueries({ queryKey: ['contents'] });
-      router.push(`/docs/${doc.id}`);
+      router.push(`/docs/editor?id=${doc.id}`);
     },
     onError: () => toast.error('Failed to create document'),
   });
@@ -235,7 +234,7 @@ export default function DrivePage() {
     const file = fileMap.get(item.id);
     if (!file) return;
     if (file.mimeType === DOC_MIME) {
-      router.push(`/docs/${file.id}`);
+      router.push(`/docs/editor?id=${file.id}`);
     } else {
       setPreviewFile(file);
     }

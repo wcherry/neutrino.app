@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Underline from '@tiptap/extension-underline';
@@ -133,9 +133,9 @@ function PageSetupModal({ pageSetup, onSave, onClose }: PageSetupModalProps) {
 const AUTO_SAVE_DELAY_MS = 2000;
 
 export function DocEditor() {
-  const params = useParams();
+  const searchParams = useSearchParams();
   const router = useRouter();
-  const docId = params.docId as string;
+  const docId = searchParams.get('id') ?? '';
   const queryClient = useQueryClient();
 
   const [title, setTitle] = useState('');
@@ -155,6 +155,7 @@ export function DocEditor() {
     queryKey: ['doc', docId],
     queryFn: () => docsApi.getDoc(docId),
     staleTime: 0,
+    enabled: !!docId,
   });
 
   const saveMutation = useMutation({
@@ -278,7 +279,7 @@ export function DocEditor() {
     paddingRight: pageSetup.marginRight,
   };
 
-  if (isLoading) {
+  if (isLoading || !docId) {
     return <div className={styles.loading}>Loading document…</div>;
   }
 
@@ -286,9 +287,9 @@ export function DocEditor() {
     <div className={styles.shell}>
       {/* ── Top bar ── */}
       <div className={styles.topbar}>
-        <button className={styles.backBtn} onClick={() => router.back()}>
+        <button className={styles.backBtn} onClick={() => router.push('/docs')}>
           <ArrowLeft size={16} />
-          Drive
+          Docs
         </button>
 
         <div className={styles.docIcon}>

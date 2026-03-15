@@ -42,7 +42,7 @@ export default function DocsPage() {
 
   const createDoc = useMutation({
     mutationFn: () => docsApi.createDoc({ title: 'Untitled document' }),
-    onSuccess: (doc) => router.push(`/docs/${doc.id}`),
+    onSuccess: (doc) => router.push(`/docs/editor?id=${doc.id}`),
   });
 
   const docs = data?.docs ?? [];
@@ -73,7 +73,7 @@ export default function DocsPage() {
             }
           />
         }
-        onItemClick={(item) => router.push(`/docs/${item.id}`)}
+        onItemClick={(item) => router.push(`/docs/editor?id=${item.id}`)}
         showFilter={false}
         showSizeColumn={false}
         sortBy={sortBy}
