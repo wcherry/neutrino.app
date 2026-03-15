@@ -40,7 +40,9 @@
     "docx": "^8.5.0",
     "mammoth": "^1.8.0",
     "file-saver": "^2.0.5",
-    "@types/file-saver": "^2.0.7"
+    "@types/file-saver": "^2.0.7",
+    "@fortune-sheet/react": "^0.4.0",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@types/node": "^20.14.0",

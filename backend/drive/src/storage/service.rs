@@ -16,7 +16,7 @@ use uuid::Uuid;
 
 const MAX_VERSIONS: i64 = 100;
 
-pub const DOC_MIME_TYPE: &str = "application/x-neutrino-doc";
+// pub const DOC_MIME_TYPE: &str = "application/x-neutrino-doc";
 
 pub struct StorageService {
     repo: Arc<StorageRepository>,
@@ -391,11 +391,12 @@ impl StorageService {
         &self.store
     }
 
-    pub async fn register_doc_file(
+    pub async fn save_file(
         &self,
         user: &AuthenticatedUser,
         file_id: &str,
         name: &str,
+        mime_type: &str,
         folder_id: Option<&str>,
     ) -> Result<FileRecord, ApiError> {
         let new_file = NewFileRecord {
@@ -403,7 +404,7 @@ impl StorageService {
             user_id: &user.user_id,
             name,
             size_bytes: 0,
-            mime_type: DOC_MIME_TYPE,
+            mime_type,
             storage_path: "",
             folder_id,
         };

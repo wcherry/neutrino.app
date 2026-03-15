@@ -9,5 +9,10 @@
   },
   "devDependencies": {
     "typescript": "^5.4.0"
+  },
+  "pnpm": {
+    "patchedDependencies": {
+      "@fortune-sheet/core@0.4.2": "patches/@fortune-sheet__core@0.4.2.patch"
+    }
   }
 }

@@ -181,7 +181,7 @@ pub async fn create_file_record(
     }
     let file = state
         .storage_service
-        .register_doc_file(&user, &req.id, &name, req.folder_id.as_deref())
+        .save_file(&user, &req.id, &name, &req.mime_type, req.folder_id.as_deref())
         .await?;
     let response = DocFileMetadataResponse {
         id: file.id,

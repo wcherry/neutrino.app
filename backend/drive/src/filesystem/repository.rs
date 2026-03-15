@@ -409,6 +409,7 @@ impl FilesystemRepository {
     }
 
     /// Delete all trash items older than 30 days; returns file records so caller can remove from disk.
+    #[allow(unused)]
     pub fn purge_expired_trash(
         &self,
         user_id: &str,

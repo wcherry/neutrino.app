@@ -997,6 +997,66 @@ export const docsApi = {
 };
 
 // ---------------------------------------------------------------------------
+// Sheets API
+// ---------------------------------------------------------------------------
+
+export interface SheetResponse {
+  id: string;
+  title: string;
+  /** FortuneSheet JSON array serialized as a string. */
+  content: string;
+  folderId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SheetMetaResponse {
+  id: string;
+  title: string;
+  folderId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateSheetRequest {
+  title: string;
+  folderId?: string | null;
+}
+
+export interface SaveSheetRequest {
+  content?: string;
+  title?: string;
+}
+
+export interface ListSheetsResponse {
+  sheets: SheetMetaResponse[];
+}
+
+export const sheetsApi = {
+  async listSheets(): Promise<ListSheetsResponse> {
+    return request<ListSheetsResponse>('/api/v1/sheets');
+  },
+
+  async createSheet(body: CreateSheetRequest): Promise<SheetResponse> {
+    return request<SheetResponse>('/api/v1/sheets', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  },
+
+  async getSheet(sheetId: string): Promise<SheetResponse> {
+    return request<SheetResponse>(`/api/v1/sheets/${sheetId}`);
+  },
+
+  async saveSheet(sheetId: string, body: SaveSheetRequest): Promise<SheetMetaResponse> {
+    return request<SheetMetaResponse>(`/api/v1/sheets/${sheetId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    });
+  },
+};
+
+// ---------------------------------------------------------------------------
 // Convenience re-exports
 // ---------------------------------------------------------------------------
 

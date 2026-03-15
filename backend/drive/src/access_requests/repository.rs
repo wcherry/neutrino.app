@@ -60,6 +60,7 @@ impl AccessRequestsRepository {
     }
 
     /// List pending requests for a specific resource.
+    #[allow(dead_code)]
     pub fn list_for_resource(
         &self,
         resource_type: &str,

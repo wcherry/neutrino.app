@@ -24,7 +24,7 @@ import {
   File,
   Clock,
 } from 'lucide-react';
-import { storageApi, filesystemApi, docsApi, type FileItem, type Folder as FolderItem } from '@/lib/api';
+import { storageApi, filesystemApi, docsApi, sheetsApi, type FileItem, type Folder as FolderItem } from '@/lib/api';
 import { useRouter } from 'next/navigation';
 import { UploadZone } from './UploadZone';
 import { PreviewModal } from './PreviewModal';
@@ -133,6 +133,7 @@ const MOCK_RECENT_FILES: FileItem[] = [
 ];
 
 const DOC_MIME = 'application/x-neutrino-doc';
+const SHEET_MIME = 'application/x-neutrino-sheet';
 
 interface ContextMenuState {
   file: FileItem;
@@ -210,6 +211,15 @@ export default function DrivePage() {
     onError: () => toast.error('Failed to create document'),
   });
 
+  const createSheetMutation = useMutation({
+    mutationFn: (title: string) => sheetsApi.createSheet({ title, folderId: currentFolderId }),
+    onSuccess: (sheet: { id: string }) => {
+      queryClient.invalidateQueries({ queryKey: ['contents'] });
+      router.push(`/sheets/editor?id=${sheet.id}`);
+    },
+    onError: () => toast.error('Failed to create spreadsheet'),
+  });
+
   const updateMutation = useMutation({
     mutationFn: ({ id, body }: { id: string; body: { name?: string; folderId?: string | null; isStarred?: boolean } }) =>
       filesystemApi.updateFile(id, body),
@@ -235,6 +245,8 @@ export default function DrivePage() {
     if (!file) return;
     if (file.mimeType === DOC_MIME) {
       router.push(`/docs/editor?id=${file.id}`);
+    } else if (file.mimeType === SHEET_MIME) {
+      router.push(`/sheets/editor?id=${file.id}`);
     } else {
       setPreviewFile(file);
     }
@@ -327,6 +339,14 @@ export default function DrivePage() {
             disabled={createDocMutation.isPending}
           >
             New document
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => createSheetMutation.mutate('Untitled spreadsheet')}
+            disabled={createSheetMutation.isPending}
+          >
+            New spreadsheet
           </Button>
           <Button variant="primary" size="sm" icon={<Upload size={16} />} onClick={() => setUploadOpen(true)}>
             Upload

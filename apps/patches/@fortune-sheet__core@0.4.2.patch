@@ -1,0 +1,22 @@
+diff --git a/dist/index.js b/dist/index.js
+index 0f91af83c54f9d24ac401711864a00353dafa0dd..6704cc9224c5b383a0f8bda90407744adfd3efd8 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -50675,7 +50675,7 @@ function tryGetCellAsNumber(cell) {
+ }
+ 
+ var parser = new formulaParser.Parser();
+-parser.on("callCellValue", function (cellCoord, done) {
++parser.on("callCellValue", function (cellCoord, _options, done) {
+   var _currentContext, _formulaCache$execFun, _flowdata$cellCoord$r;
+ 
+   var flowdata = getFlowdata(currentContext);
+@@ -50684,7 +50684,7 @@ parser.on("callCellValue", function (cellCoord, done) {
+   var v = tryGetCellAsNumber(cell);
+   done(v);
+ });
+-parser.on("callRangeValue", function (startCellCoord, endCellCoord, done) {
++parser.on("callRangeValue", function (startCellCoord, endCellCoord, _options, done) {
+   var _currentContext2;
+ 
+   var flowdata = getFlowdata(currentContext);

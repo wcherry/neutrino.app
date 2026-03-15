@@ -78,6 +78,7 @@ impl IrmRepository {
             })
     }
 
+    #[allow(dead_code)]
     pub fn update_policy(
         &self,
         resource_type: &str,

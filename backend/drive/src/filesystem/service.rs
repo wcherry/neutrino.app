@@ -405,6 +405,7 @@ impl FilesystemService {
     }
 
     /// Purge items that have been in trash for more than 30 days.
+    #[allow(dead_code)]
     pub fn purge_expired_trash(&self, user_id: &str) -> Result<BulkResult, ApiError> {
         let cutoff = (Utc::now() - Duration::days(30)).naive_utc();
         let deleted_files = self.repo.purge_expired_trash(user_id, cutoff)?;

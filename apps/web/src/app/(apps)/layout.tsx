@@ -18,6 +18,7 @@ import {
   Trash2,
   Share2,
   FileTextIcon,
+  FileSpreadsheet,
 } from 'lucide-react';
 import { authApi, storageApi, type UserProfile, type QuotaInfo } from '@/lib/api';
 
@@ -27,6 +28,7 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { id: 'my-drive', label: 'My Drive', icon: HardDrive, href: '/drive', active: true },
       { id: 'docs', label: 'Docs', icon: FileTextIcon, href: '/docs' },
+      { id: 'sheets', label: 'Sheets', icon: FileSpreadsheet, href: '/sheets' },
       { id: 'shared', label: 'Shared with me', icon: Share2, href: '/drive/shared' },
       { id: 'recent', label: 'Recent', icon: Clock, href: '/drive/recent' },
       { id: 'starred', label: 'Starred', icon: Star, href: '/drive/starred' },

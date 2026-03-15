@@ -123,6 +123,7 @@ pub struct UpdateVersionLabelRequest {
 pub struct CreateFileRequest {
     pub id: String,
     pub name: String,
+    pub mime_type: String,
     pub folder_id: Option<String>,
 }
 

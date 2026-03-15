@@ -124,18 +124,18 @@ A phased roadmap for building a Google Drive-competitive cloud storage and colla
 - [x] Document size limit: ~1.02 million characters
 
 ### 3.2 Sheets (Spreadsheet)
-- [ ] Spreadsheet grid: rows, columns, merged cells
-- [ ] Freeze rows/columns (panes)
-- [ ] Formula engine: 400+ built-in functions (SUM, VLOOKUP, IF, INDEX/MATCH, etc.)
-- [ ] Cell formatting: number, currency, date, percentage, custom
-- [ ] Sort and filter (filter views per user)
-- [ ] Conditional formatting (color scales, rules)
-- [ ] Data validation (dropdowns, numeric rules)
-- [ ] Pivot tables
-- [ ] Charts and graphs (line, bar, pie, scatter, area)
-- [ ] Import CSV, TSV; open XLSX without conversion
-- [ ] Export: XLSX, CSV, PDF
-- [ ] Cell size limit: 10 million cells per spreadsheet
+- [x] Spreadsheet grid: rows, columns, merged cells
+- [x] Freeze rows/columns (panes)
+- [x] Formula engine: 400+ built-in functions (SUM, VLOOKUP, IF, INDEX/MATCH, etc.)
+- [x] Cell formatting: number, currency, date, percentage, custom
+- [x] Sort and filter (filter views per user)
+- [x] Conditional formatting (color scales, rules)
+- [x] Data validation (dropdowns, numeric rules)
+- [x] Pivot tables
+- [x] Charts and graphs (line, bar, pie, scatter, area)
+- [x] Import CSV, TSV; open XLSX without conversion
+- [x] Export: XLSX, CSV, PDF
+- [x] Cell size limit: 10 million cells per spreadsheet
 
 ### 3.3 Slides (Presentation)
 - [ ] Slide editor: WYSIWYG canvas

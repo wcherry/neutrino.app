@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-  workflow_dispatch:
 
 permissions:
   contents: read
@@ -33,6 +32,10 @@ jobs:
             context: ./backend
             dockerfile: ./backend/Dockerfile
             build_args: SERVICE=docs
+          - image: sheets
+            context: ./backend
+            dockerfile: ./backend/Dockerfile
+            build_args: SERVICE=sheets
           - image: worker
             context: ./backend
             dockerfile: ./backend/Dockerfile

@@ -4,7 +4,7 @@ pub mod errors;
 pub mod pagination;
 pub mod tokens;
 
-pub use auth_client::{fetch_auth_profile, AuthUserProfile};
+pub use auth_client::fetch_auth_profile;
 pub use auth_extractor::AuthenticatedUser;
 pub use errors::ApiError;
 pub use pagination::{apply_list_query, ListQuery, ListQueryParams, OrderDirection};

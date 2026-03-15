@@ -4,6 +4,7 @@ use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
 pub struct AuthUserProfile {
+    #[allow(unused)]
     pub id: String,
     pub email: String,
     pub name: String,

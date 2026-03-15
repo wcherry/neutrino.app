@@ -12,6 +12,7 @@ use uuid::Uuid;
 
 const DEFAULT_PAGE_SETUP: &str = r#"{"marginTop":72,"marginBottom":72,"marginLeft":72,"marginRight":72,"orientation":"portrait","pageSize":"letter"}"#;
 const EMPTY_DOC_CONTENT: &str = r#"{"type":"doc","content":[]}"#;
+const MIME_TYPE: &str = "application/x-neutrino-doc";
 
 pub struct DocsService {
     repo: Arc<DocsRepository>,
@@ -50,7 +51,7 @@ impl DocsService {
         let id = Uuid::new_v4().to_string();
         let file = self
             .drive
-            .register_doc(&user.token, &id, &title, req.folder_id.as_deref())
+            .create_doc(&user.token, &id, &title, &MIME_TYPE, req.folder_id.as_deref())
             .await?;
         let new_doc = NewDocRecord {
             file_id: &id,
