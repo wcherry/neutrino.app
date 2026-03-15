@@ -40,10 +40,10 @@ jobs:
             context: ./backend
             dockerfile: ./backend/Dockerfile
             build_args: SERVICE=worker
-          - image: neutrino
-            context: .
-            dockerfile: ./Dockerfile.combined
-            build_args: ""
+          # - image: neutrino
+          #   context: .
+          #   dockerfile: ./Dockerfile.combined
+          #   build_args: ""
 
     steps:
       - name: Checkout
