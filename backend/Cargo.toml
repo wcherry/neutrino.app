@@ -5,6 +5,7 @@ members = [
     "drive",
     "shared",
     "sheets",
+    "slides",
     "worker",
 ]
 resolver = "2"

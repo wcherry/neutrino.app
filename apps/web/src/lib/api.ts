@@ -1057,6 +1057,66 @@ export const sheetsApi = {
 };
 
 // ---------------------------------------------------------------------------
+// Slides API
+// ---------------------------------------------------------------------------
+
+export interface SlideResponse {
+  id: string;
+  title: string;
+  /** Neutrino Slides JSON serialized as a string. */
+  content: string;
+  folderId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SlideMetaResponse {
+  id: string;
+  title: string;
+  folderId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateSlideRequest {
+  title: string;
+  folderId?: string | null;
+}
+
+export interface SaveSlideRequest {
+  content?: string;
+  title?: string;
+}
+
+export interface ListSlidesResponse {
+  slides: SlideMetaResponse[];
+}
+
+export const slidesApi = {
+  async listSlides(): Promise<ListSlidesResponse> {
+    return request<ListSlidesResponse>('/api/v1/slides');
+  },
+
+  async createSlide(body: CreateSlideRequest): Promise<SlideResponse> {
+    return request<SlideResponse>('/api/v1/slides', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  },
+
+  async getSlide(slideId: string): Promise<SlideResponse> {
+    return request<SlideResponse>(`/api/v1/slides/${slideId}`);
+  },
+
+  async saveSlide(slideId: string, body: SaveSlideRequest): Promise<SlideMetaResponse> {
+    return request<SlideMetaResponse>(`/api/v1/slides/${slideId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    });
+  },
+};
+
+// ---------------------------------------------------------------------------
 // Convenience re-exports
 // ---------------------------------------------------------------------------
 

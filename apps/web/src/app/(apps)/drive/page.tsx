@@ -24,7 +24,7 @@ import {
   File,
   Clock,
 } from 'lucide-react';
-import { storageApi, filesystemApi, docsApi, sheetsApi, type FileItem, type Folder as FolderItem } from '@/lib/api';
+import { storageApi, filesystemApi, docsApi, sheetsApi, slidesApi, type FileItem, type Folder as FolderItem } from '@/lib/api';
 import { useRouter } from 'next/navigation';
 import { UploadZone } from './UploadZone';
 import { PreviewModal } from './PreviewModal';
@@ -134,6 +134,7 @@ const MOCK_RECENT_FILES: FileItem[] = [
 
 const DOC_MIME = 'application/x-neutrino-doc';
 const SHEET_MIME = 'application/x-neutrino-sheet';
+const SLIDES_MIME = 'application/x-neutrino-slide';
 
 interface ContextMenuState {
   file: FileItem;
@@ -220,6 +221,15 @@ export default function DrivePage() {
     onError: () => toast.error('Failed to create spreadsheet'),
   });
 
+  const createSlideMutation = useMutation({
+    mutationFn: (title: string) => slidesApi.createSlide({ title, folderId: currentFolderId }),
+    onSuccess: (slide: { id: string }) => {
+      queryClient.invalidateQueries({ queryKey: ['contents'] });
+      router.push(`/slides/editor?id=${slide.id}`);
+    },
+    onError: () => toast.error('Failed to create presentation'),
+  });
+
   const updateMutation = useMutation({
     mutationFn: ({ id, body }: { id: string; body: { name?: string; folderId?: string | null; isStarred?: boolean } }) =>
       filesystemApi.updateFile(id, body),
@@ -247,6 +257,8 @@ export default function DrivePage() {
       router.push(`/docs/editor?id=${file.id}`);
     } else if (file.mimeType === SHEET_MIME) {
       router.push(`/sheets/editor?id=${file.id}`);
+    } else if (file.mimeType === SLIDES_MIME) {
+      router.push(`/slides/editor?id=${file.id}`);
     } else {
       setPreviewFile(file);
     }
@@ -347,6 +359,14 @@ export default function DrivePage() {
             disabled={createSheetMutation.isPending}
           >
             New spreadsheet
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => createSlideMutation.mutate('Untitled presentation')}
+            disabled={createSlideMutation.isPending}
+          >
+            New presentation
           </Button>
           <Button variant="primary" size="sm" icon={<Upload size={16} />} onClick={() => setUploadOpen(true)}>
             Upload

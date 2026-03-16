@@ -16,8 +16,6 @@ use uuid::Uuid;
 
 const MAX_VERSIONS: i64 = 100;
 
-// pub const DOC_MIME_TYPE: &str = "application/x-neutrino-doc";
-
 pub struct StorageService {
     repo: Arc<StorageRepository>,
     store: Arc<LocalFileStore>,

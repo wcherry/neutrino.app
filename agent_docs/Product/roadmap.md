@@ -138,17 +138,17 @@ A phased roadmap for building a Google Drive-competitive cloud storage and colla
 - [x] Cell size limit: 10 million cells per spreadsheet
 
 ### 3.3 Slides (Presentation)
-- [ ] Slide editor: WYSIWYG canvas
-- [ ] Insert text boxes, images, shapes, tables, charts
-- [ ] Built-in themes and color palettes
-- [ ] Slide Master for custom templates
-- [ ] Animations (fade, fly-in, zoom) per object
-- [ ] Slide transitions (cut, fade, slide)
-- [ ] Speaker notes per slide
-- [ ] Presenter view: current slide, notes, timer, next slide preview
-- [ ] Export: PPTX, PDF, PNG/JPEG per slide
-- [ ] Import: PPTX (convert to native format)
-- [ ] File size limit: 100 MB (converted from PPTX)
+- [x] Slide editor: WYSIWYG canvas
+- [x] Insert text boxes, images, shapes, tables, charts
+- [x] Built-in themes and color palettes
+- [x] Slide Master for custom templates
+- [x] Animations (fade, fly-in, zoom) per object
+- [x] Slide transitions (cut, fade, slide)
+- [x] Speaker notes per slide
+- [x] Presenter view: current slide, notes, timer, next slide preview
+- [x] Export: PPTX, PDF, PNG/JPEG per slide
+- [x] Import: PPTX (convert to native format)
+- [x] File size limit: 100 MB (converted from PPTX)
 
 ### 3.4 Editor Infrastructure
 - [ ] Auto-save (no manual save required)
