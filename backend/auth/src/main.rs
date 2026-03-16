@@ -99,7 +99,7 @@ async fn main() -> std::io::Result<()> {
 
     info!("Database migrations applied");
 
-    let token_service = Arc::new(TokenService::new(
+    let token_service = Arc::new(TokenService::new_with_expiry(
         config.jwt_secret.clone(),
         config.jwt_access_expiry_secs,
         config.jwt_refresh_expiry_secs,

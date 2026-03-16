@@ -13,8 +13,6 @@ pub struct CreateSheetRequest {
 #[derive(Debug, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SaveSheetRequest {
-    /// FortuneSheet JSON array serialized as a string.
-    pub content: Option<String>,
     /// Optional new title (renames the backing file record).
     pub title: Option<String>,
 }
@@ -26,8 +24,10 @@ pub struct SaveSheetRequest {
 pub struct SheetResponse {
     pub id: String,
     pub title: String,
-    /// FortuneSheet JSON array as a string.
-    pub content: String,
+    /// Path to read spreadsheet content directly from the drive API.
+    pub content_url: String,
+    /// Path to write spreadsheet content directly to the drive API (multipart POST).
+    pub content_write_url: String,
     pub folder_id: Option<String>,
     pub created_at: String,
     pub updated_at: String,

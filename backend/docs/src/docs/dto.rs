@@ -13,7 +13,6 @@ pub struct CreateDocRequest {
 #[derive(Debug, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SaveDocRequest {
-    pub content: Option<String>,
     pub page_setup: Option<PageSetup>,
     /// Optional new title for the document (renames the backing file record).
     pub title: Option<String>,
@@ -37,7 +36,10 @@ pub struct PageSetup {
 pub struct DocResponse {
     pub id: String,
     pub title: String,
-    pub content: String,
+    /// Path to read document content directly from the drive API.
+    pub content_url: String,
+    /// Path to write document content directly to the drive API (multipart POST).
+    pub content_write_url: String,
     pub page_setup: PageSetup,
     pub folder_id: Option<String>,
     pub created_at: String,

@@ -917,6 +917,57 @@ export const sharedWithMeApi = {
 };
 
 // ---------------------------------------------------------------------------
+// Drive content helpers (read/write content directly, bypassing app services)
+// ---------------------------------------------------------------------------
+
+/**
+ * Fetch file content as text directly from the drive API.
+ * @param path - The `contentUrl` returned by the app service (e.g. /api/v1/drive/files/{id})
+ */
+export async function driveReadContent(path: string): Promise<string> {
+  const res = await fetch(`${BASE_URL}${path}`, { headers: getAuthHeader() });
+  if (res.status === 401) {
+    const refreshed = await refreshTokensOnce();
+    if (refreshed) {
+      const retry = await fetch(`${BASE_URL}${path}`, { headers: getAuthHeader() });
+      if (!retry.ok) throw new ApiClientError(retry.status, 'CONTENT_READ_ERROR', 'Failed to read content');
+      return retry.text();
+    }
+    clearAuthAndRedirect();
+    throw new ApiClientError(401, 'UNAUTHENTICATED', 'Session expired');
+  }
+  if (!res.ok) throw new ApiClientError(res.status, 'CONTENT_READ_ERROR', 'Failed to read content');
+  return res.text();
+}
+
+/**
+ * Upload file content directly to the drive API as a new version.
+ * @param path - The `contentWriteUrl` returned by the app service (e.g. /api/v1/drive/files/{id}/versions)
+ * @param content - The content string to upload
+ * @param filename - Filename hint for the multipart upload (e.g. "doc.json")
+ */
+export async function driveWriteContent(path: string, content: string, filename: string): Promise<void> {
+  const formData = new FormData();
+  formData.append('file', new Blob([content], { type: 'application/json' }), filename);
+  const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+  const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+  const res = await fetch(`${BASE_URL}${path}`, { method: 'POST', headers, body: formData });
+  if (res.status === 401) {
+    const refreshed = await refreshTokensOnce();
+    if (refreshed) {
+      const newToken = localStorage.getItem('access_token');
+      const retryHeaders: Record<string, string> = newToken ? { Authorization: `Bearer ${newToken}` } : {};
+      const retry = await fetch(`${BASE_URL}${path}`, { method: 'POST', headers: retryHeaders, body: formData });
+      if (!retry.ok) throw new ApiClientError(retry.status, 'CONTENT_WRITE_ERROR', 'Failed to write content');
+      return;
+    }
+    clearAuthAndRedirect();
+    throw new ApiClientError(401, 'UNAUTHENTICATED', 'Session expired');
+  }
+  if (!res.ok) throw new ApiClientError(res.status, 'CONTENT_WRITE_ERROR', 'Failed to write content');
+}
+
+// ---------------------------------------------------------------------------
 // Docs API
 // ---------------------------------------------------------------------------
 
@@ -932,7 +983,10 @@ export interface PageSetup {
 export interface DocResponse {
   id: string;
   title: string;
-  content: string;
+  /** Path to read document content directly from the drive API (GET). */
+  contentUrl: string;
+  /** Path to write document content directly to the drive API (multipart POST). */
+  contentWriteUrl: string;
   pageSetup: PageSetup;
   folderId: string | null;
   createdAt: string;
@@ -953,7 +1007,6 @@ export interface CreateDocRequest {
 }
 
 export interface SaveDocRequest {
-  content?: string;
   pageSetup?: PageSetup;
   title?: string;
 }
@@ -1003,8 +1056,10 @@ export const docsApi = {
 export interface SheetResponse {
   id: string;
   title: string;
-  /** FortuneSheet JSON array serialized as a string. */
-  content: string;
+  /** Path to read spreadsheet content directly from the drive API (GET). */
+  contentUrl: string;
+  /** Path to write spreadsheet content directly to the drive API (multipart POST). */
+  contentWriteUrl: string;
   folderId: string | null;
   createdAt: string;
   updatedAt: string;
@@ -1024,7 +1079,6 @@ export interface CreateSheetRequest {
 }
 
 export interface SaveSheetRequest {
-  content?: string;
   title?: string;
 }
 
@@ -1063,8 +1117,10 @@ export const sheetsApi = {
 export interface SlideResponse {
   id: string;
   title: string;
-  /** Neutrino Slides JSON serialized as a string. */
-  content: string;
+  /** Path to read presentation content directly from the drive API (GET). */
+  contentUrl: string;
+  /** Path to write presentation content directly to the drive API (multipart POST). */
+  contentWriteUrl: string;
   folderId: string | null;
   createdAt: string;
   updatedAt: string;
@@ -1084,7 +1140,6 @@ export interface CreateSlideRequest {
 }
 
 export interface SaveSlideRequest {
-  content?: string;
   title?: string;
 }
 

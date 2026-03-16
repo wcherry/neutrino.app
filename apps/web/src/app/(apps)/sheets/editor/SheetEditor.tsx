@@ -5,7 +5,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Download, Upload, ChevronDown, Table2 } from 'lucide-react';
 import { Button } from '@neutrino/ui';
-import { sheetsApi } from '@/lib/api';
+import { sheetsApi, driveReadContent, driveWriteContent } from '@/lib/api';
 import styles from './page.module.css';
 
 // ── Export helpers ──────────────────────────────────────────────────────────
@@ -119,37 +119,55 @@ export function SheetEditor() {
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
 
-  const { isLoading, data: sheetData } = useQuery({
+  const { isLoading: metaLoading, data: sheetData } = useQuery({
     queryKey: ['sheet', sheetId],
     queryFn: () => sheetsApi.getSheet(sheetId),
     enabled: !!sheetId,
     staleTime: 30_000,
   });
 
+  const { isLoading: contentLoading, data: sheetContent } = useQuery({
+    queryKey: ['sheet-content', sheetId],
+    queryFn: () => driveReadContent(sheetData!.contentUrl),
+    enabled: !!sheetData?.contentUrl,
+    staleTime: 30_000,
+  });
+
+  const isLoading = metaLoading || contentLoading;
+
   useEffect(() => {
     if (!sheetData) return;
     setTitle(sheetData.title);
+  }, [sheetData]);
+
+  useEffect(() => {
+    if (!sheetContent) return;
     try {
-      const parsed = JSON.parse(sheetData.content);
+      const parsed = JSON.parse(sheetContent);
       if (Array.isArray(parsed) && parsed.length > 0) {
         setFortuneData(parsed);
-        lastSavedContentRef.current = sheetData.content;
+        lastSavedContentRef.current = sheetContent;
       }
     } catch {
       // keep default
     }
-  }, [sheetData]);
+  }, [sheetContent]);
 
-  const saveMutation = useMutation({
-    mutationFn: ({ content, newTitle }: { content?: string; newTitle?: string }) =>
-      sheetsApi.saveSheet(sheetId, { content, title: newTitle }),
+  const contentMutation = useMutation({
+    mutationFn: (content: string) =>
+      driveWriteContent(sheetData!.contentWriteUrl, content, 'sheet.json'),
     onMutate: () => setSaveStatus('saving'),
-    onSuccess: (_, vars) => {
+    onSuccess: (_, content) => {
       setSaveStatus('saved');
-      if (vars.content !== undefined) lastSavedContentRef.current = vars.content;
+      lastSavedContentRef.current = content;
       queryClient.invalidateQueries({ queryKey: ['sheets'] });
     },
     onError: () => setSaveStatus('error'),
+  });
+
+  const metaMutation = useMutation({
+    mutationFn: (newTitle: string) =>
+      sheetsApi.saveSheet(sheetId, { title: newTitle }),
   });
 
   const scheduleAutoSave = useCallback(() => {
@@ -157,9 +175,9 @@ export function SheetEditor() {
     setSaveStatus('unsaved');
     saveTimerRef.current = setTimeout(() => {
       const content = JSON.stringify(latestDataRef.current);
-      saveMutation.mutate({ content });
+      contentMutation.mutate(content);
     }, 15000);
-  }, [saveMutation]);
+  }, [contentMutation]);
 
   function handleChange(data: object[]) {
     const serialized = JSON.stringify(data);
@@ -174,7 +192,7 @@ export function SheetEditor() {
   function handleTitleBlur() {
     const trimmed = title.trim();
     if (!trimmed) return;
-    saveMutation.mutate({ newTitle: trimmed });
+    metaMutation.mutate(trimmed);
   }
 
   async function handleExportCsv() {

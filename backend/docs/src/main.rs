@@ -12,7 +12,6 @@ use utoipa_swagger_ui::SwaggerUi;
 mod common;
 mod config;
 mod docs;
-mod drive_client;
 mod schema;
 
 use crate::common::TokenService;
@@ -20,7 +19,7 @@ use crate::config::Config;
 use crate::docs::api::{DocsApiDoc, DocsApiState};
 use crate::docs::repository::DocsRepository;
 use crate::docs::service::DocsService;
-use crate::drive_client::DriveClient;
+use shared::drive_client::DriveClient;
 
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
 

@@ -11,7 +11,6 @@ use utoipa_swagger_ui::SwaggerUi;
 
 mod common;
 mod config;
-mod drive_client;
 mod schema;
 mod sheets;
 
@@ -20,7 +19,7 @@ use crate::config::Config;
 use crate::sheets::api::{SheetsApiDoc, SheetsApiState};
 use crate::sheets::repository::SheetsRepository;
 use crate::sheets::service::SheetsService;
-use crate::drive_client::DriveClient;
+use shared::drive_client::DriveClient;
 
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
 

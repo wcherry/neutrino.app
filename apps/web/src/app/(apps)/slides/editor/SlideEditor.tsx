@@ -33,7 +33,7 @@ import {
   Upload,
 } from 'lucide-react';
 import { Button } from '@neutrino/ui';
-import { slidesApi } from '@/lib/api';
+import { slidesApi, driveReadContent, driveWriteContent } from '@/lib/api';
 import styles from './page.module.css';
 
 // ── Data model ──────────────────────────────────────────────────────────────
@@ -435,59 +435,55 @@ export function SlideEditor() {
   const importInputRef = useRef<HTMLInputElement>(null);
   const dragSrcIdx = useRef<number | null>(null);
 
-  const { isLoading } = useQuery({
-    queryKey: ['slide', slideId],
-    queryFn: () => slidesApi.getSlide(slideId),
-    enabled: !!slideId,
-    staleTime: 30_000,
-    select: (data) => data,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    onSuccess: (data: any) => {
-      setTitle(data.title);
-      try {
-        const parsed: SlidePresentation = JSON.parse(data.content);
-        if (parsed?.slides?.length > 0) {
-          setPresentation(parsed);
-          lastSavedRef.current = data.content;
-        }
-      } catch {
-        // keep default
-      }
-    },
-  } as Parameters<typeof useQuery>[0]);
-
-  // Fallback for React Query v5 (onSuccess removed from useQuery)
-  const { data: slideData } = useQuery({
+  const { isLoading: metaLoading, data: slideData } = useQuery({
     queryKey: ['slide', slideId],
     queryFn: () => slidesApi.getSlide(slideId),
     enabled: !!slideId,
     staleTime: 30_000,
   });
 
+  const { isLoading: contentLoading, data: slideContent } = useQuery({
+    queryKey: ['slide-content', slideId],
+    queryFn: () => driveReadContent(slideData!.contentUrl),
+    enabled: !!slideData?.contentUrl,
+    staleTime: 30_000,
+  });
+
+  const isLoading = metaLoading || contentLoading;
+
   useEffect(() => {
     if (!slideData) return;
     setTitle(slideData.title);
+  }, [slideData]);
+
+  useEffect(() => {
+    if (!slideContent) return;
     try {
-      const parsed: SlidePresentation = JSON.parse(slideData.content);
+      const parsed: SlidePresentation = JSON.parse(slideContent);
       if (parsed?.slides?.length > 0) {
         setPresentation(parsed);
-        lastSavedRef.current = slideData.content;
+        lastSavedRef.current = slideContent;
       }
     } catch {
       // keep default
     }
-  }, [slideData]);
+  }, [slideContent]);
 
-  const saveMutation = useMutation({
-    mutationFn: ({ content, newTitle }: { content?: string; newTitle?: string }) =>
-      slidesApi.saveSlide(slideId, { content, title: newTitle }),
+  const contentMutation = useMutation({
+    mutationFn: (content: string) =>
+      driveWriteContent(slideData!.contentWriteUrl, content, 'slide.json'),
     onMutate: () => setSaveStatus('saving'),
-    onSuccess: (_, vars) => {
+    onSuccess: (_, content) => {
       setSaveStatus('saved');
-      if (vars.content !== undefined) lastSavedRef.current = vars.content;
+      lastSavedRef.current = content;
       queryClient.invalidateQueries({ queryKey: ['slides'] });
     },
     onError: () => setSaveStatus('error'),
+  });
+
+  const metaMutation = useMutation({
+    mutationFn: (newTitle: string) =>
+      slidesApi.saveSlide(slideId, { title: newTitle }),
   });
 
   const scheduleAutoSave = useCallback((pres: SlidePresentation) => {
@@ -495,9 +491,9 @@ export function SlideEditor() {
     setSaveStatus('unsaved');
     saveTimerRef.current = setTimeout(() => {
       const content = JSON.stringify(pres);
-      saveMutation.mutate({ content });
+      contentMutation.mutate(content);
     }, 2000);
-  }, [saveMutation]);
+  }, [contentMutation]);
 
   function updatePresentation(updater: (p: SlidePresentation) => SlidePresentation) {
     setPresentation((prev) => {
@@ -510,7 +506,7 @@ export function SlideEditor() {
   function handleTitleBlur() {
     const trimmed = title.trim();
     if (!trimmed) return;
-    saveMutation.mutate({ newTitle: trimmed });
+    metaMutation.mutate(trimmed);
   }
 
   // Close dropdowns on outside click

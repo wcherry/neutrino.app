@@ -4,7 +4,14 @@ use crate::docs::{
     model::{NewDocRecord, UpdateDocRecord},
     repository::DocsRepository,
 };
-use crate::drive_client::DriveClient;
+
+fn content_urls(file_id: &str) -> (String, String) {
+    (
+        format!("/api/v1/drive/files/{}", file_id),
+        format!("/api/v1/drive/files/{}/versions", file_id),
+    )
+}
+use shared::drive_client::DriveClient;
 use chrono::Utc;
 use serde_json::Value;
 use std::sync::Arc;
@@ -25,7 +32,7 @@ impl DocsService {
     }
 
     pub async fn list_docs(&self, user: &AuthenticatedUser) -> Result<ListDocsResponse, ApiError> {
-        let items = self.drive.list_docs(&user.token).await?;
+        let items = self.drive.list_files(&user.token, MIME_TYPE).await?;
         let docs = items
             .into_iter()
             .map(|item| DocMetaResponse {
@@ -51,7 +58,7 @@ impl DocsService {
         let id = Uuid::new_v4().to_string();
         let file = self
             .drive
-            .create_doc(&user.token, &id, &title, &MIME_TYPE, req.folder_id.as_deref())
+            .create_file(&user.token, &id, &title, MIME_TYPE, req.folder_id.as_deref())
             .await?;
         let new_doc = NewDocRecord {
             file_id: &id,
@@ -61,14 +68,16 @@ impl DocsService {
 
         // Upload initial empty content to drive storage
         self.drive
-            .upload_doc_content(&user.token, &id, EMPTY_DOC_CONTENT)
+            .upload_content(&user.token, &id, EMPTY_DOC_CONTENT, "upload_doc_content")
             .await?;
 
         let page_setup = default_page_setup();
+        let (content_url, content_write_url) = content_urls(&id);
         Ok(DocResponse {
             id: file.id,
             title: file.name,
-            content: EMPTY_DOC_CONTENT.to_string(),
+            content_url,
+            content_write_url,
             page_setup,
             folder_id: file.folder_id,
             created_at: file.created_at.and_utc().to_rfc3339(),
@@ -81,22 +90,22 @@ impl DocsService {
         user: &AuthenticatedUser,
         doc_id: &str,
     ) -> Result<DocResponse, ApiError> {
-        let file = self.drive.get_file(&user.token, doc_id).await?;
+        let file = self
+            .drive
+            .get_file(&user.token, doc_id, "Document not found")
+            .await?;
         if file.deleted_at.is_some() {
             return Err(ApiError::not_found("Document is in trash"));
         }
         let doc = self.repo.get_doc(doc_id)?;
-        let file = self.drive.get_file(&user.token, doc_id).await?;
-        let content = match file.storage_path {
-            Some(_) => self.drive.get_doc_content(&user.token, doc_id).await?,
-            None => "".to_string(),
-        };
         let page_setup = serde_json::from_str::<PageSetup>(&doc.page_setup)
             .unwrap_or_else(|_| default_page_setup());
+        let (content_url, content_write_url) = content_urls(doc_id);
         Ok(DocResponse {
             id: file.id,
             title: file.name,
-            content,
+            content_url,
+            content_write_url,
             page_setup,
             folder_id: file.folder_id,
             created_at: file.created_at.and_utc().to_rfc3339(),
@@ -110,7 +119,10 @@ impl DocsService {
         doc_id: &str,
         req: SaveDocRequest,
     ) -> Result<DocMetaResponse, ApiError> {
-        let file = self.drive.get_file(&user.token, doc_id).await?;
+        let file = self
+            .drive
+            .get_file(&user.token, doc_id, "Document not found")
+            .await?;
         match file.your_role.as_str() {
             "owner" | "editor" => {}
             _ => return Err(ApiError::new(403, "FORBIDDEN", "Edit access required")),
@@ -130,13 +142,6 @@ impl DocsService {
         } else {
             file.name.clone()
         };
-
-        // Upload new content to drive if provided
-        if let Some(ref content) = req.content {
-            self.drive
-                .upload_doc_content(&user.token, doc_id, content)
-                .await?;
-        }
 
         let new_page_setup = req
             .page_setup
@@ -164,11 +169,17 @@ impl DocsService {
         user: &AuthenticatedUser,
         doc_id: &str,
     ) -> Result<ExportTextResponse, ApiError> {
-        let file = self.drive.get_file(&user.token, doc_id).await?;
+        let file = self
+            .drive
+            .get_file(&user.token, doc_id, "Document not found")
+            .await?;
         if file.deleted_at.is_some() {
             return Err(ApiError::not_found("Document is in trash"));
         }
-        let content = self.drive.get_doc_content(&user.token, doc_id).await?;
+        let content = self
+            .drive
+            .get_content(&user.token, doc_id, "Document content not found")
+            .await?;
         let text = extract_text_from_tiptap_json(&content);
         let word_count = count_words(&text);
         let char_count = text.chars().count() as u32;

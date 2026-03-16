@@ -4,7 +4,14 @@ use crate::sheets::{
     model::{NewSheetRecord, UpdateSheetRecord},
     repository::SheetsRepository,
 };
-use crate::drive_client::DriveClient;
+
+fn content_urls(file_id: &str) -> (String, String) {
+    (
+        format!("/api/v1/drive/files/{}", file_id),
+        format!("/api/v1/drive/files/{}/versions", file_id),
+    )
+}
+use shared::drive_client::DriveClient;
 use chrono::Utc;
 use std::sync::Arc;
 use uuid::Uuid;
@@ -24,7 +31,7 @@ impl SheetsService {
     }
 
     pub async fn list_sheets(&self, user: &AuthenticatedUser) -> Result<ListSheetsResponse, ApiError> {
-        let items = self.drive.list_sheets(&user.token).await?;
+        let items = self.drive.list_files(&user.token, MIME_TYPE).await?;
         let sheets = items
             .into_iter()
             .map(|item| SheetMetaResponse {
@@ -50,19 +57,21 @@ impl SheetsService {
         let id = Uuid::new_v4().to_string();
         let file = self
             .drive
-            .register_sheet(&user.token, &id, &title, &MIME_TYPE, req.folder_id.as_deref())
+            .create_file(&user.token, &id, &title, MIME_TYPE, req.folder_id.as_deref())
             .await?;
         let new_sheet = NewSheetRecord { file_id: &id };
         self.repo.insert_sheet(new_sheet)?;
 
         self.drive
-            .upload_sheet_content(&user.token, &id, EMPTY_SHEET_CONTENT)
+            .upload_content(&user.token, &id, EMPTY_SHEET_CONTENT, "upload_sheet_content")
             .await?;
 
+        let (content_url, content_write_url) = content_urls(&id);
         Ok(SheetResponse {
             id: file.id,
             title: file.name,
-            content: EMPTY_SHEET_CONTENT.to_string(),
+            content_url,
+            content_write_url,
             folder_id: file.folder_id,
             created_at: file.created_at.and_utc().to_rfc3339(),
             updated_at: file.updated_at.and_utc().to_rfc3339(),
@@ -74,18 +83,19 @@ impl SheetsService {
         user: &AuthenticatedUser,
         sheet_id: &str,
     ) -> Result<SheetResponse, ApiError> {
-        let file = self.drive.get_file(&user.token, sheet_id).await?;
+        let file = self
+            .drive
+            .get_file(&user.token, sheet_id, "Spreadsheet not found")
+            .await?;
         if file.deleted_at.is_some() {
             return Err(ApiError::not_found("Spreadsheet is in trash"));
         }
-        let content = match file.storage_path {
-            Some(_) => self.drive.get_sheet_content(&user.token, sheet_id).await?,
-            None => EMPTY_SHEET_CONTENT.to_string(),
-        };
+        let (content_url, content_write_url) = content_urls(sheet_id);
         Ok(SheetResponse {
             id: file.id,
             title: file.name,
-            content,
+            content_url,
+            content_write_url,
             folder_id: file.folder_id,
             created_at: file.created_at.and_utc().to_rfc3339(),
             updated_at: file.updated_at.and_utc().to_rfc3339(),
@@ -98,7 +108,10 @@ impl SheetsService {
         sheet_id: &str,
         req: SaveSheetRequest,
     ) -> Result<SheetMetaResponse, ApiError> {
-        let file = self.drive.get_file(&user.token, sheet_id).await?;
+        let file = self
+            .drive
+            .get_file(&user.token, sheet_id, "Spreadsheet not found")
+            .await?;
         match file.your_role.as_str() {
             "owner" | "editor" => {}
             _ => return Err(ApiError::new(403, "FORBIDDEN", "Edit access required")),
@@ -118,12 +131,6 @@ impl SheetsService {
         } else {
             file.name.clone()
         };
-
-        if let Some(ref content) = req.content {
-            self.drive
-                .upload_sheet_content(&user.token, sheet_id, content)
-                .await?;
-        }
 
         let now = Utc::now().naive_utc();
         let changes = UpdateSheetRecord { updated_at: now };

@@ -11,7 +11,6 @@ use utoipa_swagger_ui::SwaggerUi;
 
 mod common;
 mod config;
-mod drive_client;
 mod schema;
 mod slides;
 
@@ -20,7 +19,7 @@ use crate::config::Config;
 use crate::slides::api::{SlidesApiDoc, SlidesApiState};
 use crate::slides::repository::SlidesRepository;
 use crate::slides::service::SlidesService;
-use crate::drive_client::DriveClient;
+use shared::drive_client::DriveClient;
 
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
 

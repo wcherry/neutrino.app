@@ -2597,6 +2597,15 @@ dependencies = [
 name = "shared"
 version = "0.1.0"
 dependencies = [
+ "actix-web",
+ "chrono",
+ "diesel",
+ "hex",
+ "jsonwebtoken",
+ "rand_core 0.6.4",
+ "reqwest",
+ "serde",
+ "serde_json",
  "thiserror 1.0.69",
  "tracing",
  "tracing-appender",

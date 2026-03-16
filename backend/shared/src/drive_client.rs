@@ -1,11 +1,12 @@
 use chrono::NaiveDateTime;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
-use crate::common::ApiError;
+
+use crate::api_error::ApiError;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct DriveSheetListItem {
+pub struct DriveListItem {
     pub id: String,
     pub name: String,
     pub folder_id: Option<String>,
@@ -16,7 +17,7 @@ pub struct DriveSheetListItem {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct DriveListFilesResponse {
-    files: Vec<DriveSheetListItem>,
+    files: Vec<DriveListItem>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -28,6 +29,7 @@ pub struct DriveFileRecord {
     pub deleted_at: Option<NaiveDateTime>,
     pub your_role: String,
     pub storage_path: Option<String>,
+    pub mime_type: Option<String>,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
 }
@@ -60,33 +62,35 @@ impl DriveClient {
         }
     }
 
-    pub async fn list_sheets(&self, token: &str) -> Result<Vec<DriveSheetListItem>, ApiError> {
-        let url = format!(
-            "{}api/v1/drive/files?mimeType=application%2Fx-neutrino-sheet&limit=200",
-            self.base_url
-        );
+    pub async fn list_files(
+        &self,
+        token: &str,
+        mime_type: &str,
+    ) -> Result<Vec<DriveListItem>, ApiError> {
+        let url = format!("{}api/v1/drive/files", self.base_url);
         let resp = self
             .http
             .get(url)
             .bearer_auth(token)
+            .query(&[("mimeType", mime_type), ("limit", "200")])
             .send()
             .await
             .map_err(|e| {
-                tracing::error!("Drive client list_sheets error: {:?}", e);
+                tracing::error!("Drive client list_files error: {:?}", e);
                 ApiError::internal("Failed to reach drive service")
             })?;
         if !resp.status().is_success() {
-            tracing::error!("Drive service list_sheets returned {}", resp.status());
+            tracing::error!("Drive service list_files returned {}", resp.status());
             return Err(ApiError::internal("Drive service error"));
         }
         let body = resp.json::<DriveListFilesResponse>().await.map_err(|e| {
-            tracing::error!("Drive client list_sheets decode error: {:?}", e);
+            tracing::error!("Drive client list_files decode error: {:?}", e);
             ApiError::internal("Invalid response from drive service")
         })?;
         Ok(body.files)
     }
 
-    pub async fn register_sheet(
+    pub async fn create_file(
         &self,
         token: &str,
         id: &str,
@@ -101,6 +105,7 @@ impl DriveClient {
             folder_id: folder_id.map(|s| s.to_string()),
         };
         let url = format!("{}api/v1/drive/files", self.base_url);
+
         let resp = self
             .http
             .post(url)
@@ -109,16 +114,16 @@ impl DriveClient {
             .send()
             .await
             .map_err(|e| {
-                tracing::error!("Drive client register_sheet error: {:?}", e);
+                tracing::error!("Drive client create_file error: {:?}", e);
                 ApiError::internal("Failed to reach drive service")
             })?;
         if !resp.status().is_success() {
             let status = resp.status().as_u16();
-            tracing::error!("Drive service register_sheet returned {}", status);
+            tracing::error!("Drive service create_file returned {}", status);
             return Err(ApiError::internal("Drive service error"));
         }
         resp.json::<DriveFileRecord>().await.map_err(|e| {
-            tracing::error!("Drive client decode error: {:?}", e);
+            tracing::error!("Drive client create_file decode error: {:?}", e);
             ApiError::internal("Invalid response from drive service")
         })
     }
@@ -127,6 +132,7 @@ impl DriveClient {
         &self,
         token: &str,
         file_id: &str,
+        not_found_msg: &str,
     ) -> Result<DriveFileRecord, ApiError> {
         let resp = self
             .http
@@ -140,7 +146,7 @@ impl DriveClient {
             })?;
         match resp.status().as_u16() {
             403 => return Err(ApiError::new(403, "FORBIDDEN", "Access denied")),
-            404 => return Err(ApiError::not_found("Spreadsheet not found")),
+            404 => return Err(ApiError::not_found(not_found_msg)),
             s if s >= 400 => {
                 tracing::error!("Drive service get_file returned {}", s);
                 return Err(ApiError::internal("Drive service error"));
@@ -148,15 +154,16 @@ impl DriveClient {
             _ => {}
         }
         resp.json::<DriveFileRecord>().await.map_err(|e| {
-            tracing::error!("Drive client decode error: {:?}", e);
+            tracing::error!("Drive client get_file decode error: {:?}", e);
             ApiError::internal("Invalid response from drive service")
         })
     }
 
-    pub async fn get_sheet_content(
+    pub async fn get_content(
         &self,
         token: &str,
         file_id: &str,
+        not_found_msg: &str,
     ) -> Result<String, ApiError> {
         let resp = self
             .http
@@ -165,28 +172,29 @@ impl DriveClient {
             .send()
             .await
             .map_err(|e| {
-                tracing::error!("Drive client get_sheet_content error: {:?}", e);
+                tracing::error!("Drive client get_content error: {:?}", e);
                 ApiError::internal("Failed to reach drive service")
             })?;
         match resp.status().as_u16() {
-            404 => return Err(ApiError::not_found("Spreadsheet content not found")),
+            404 => return Err(ApiError::not_found(not_found_msg)),
             s if s >= 400 => {
-                tracing::error!("Drive service get_sheet_content returned {}", s);
+                tracing::error!("Drive service get_content returned {}", s);
                 return Err(ApiError::internal("Drive service error"));
             }
             _ => {}
         }
         resp.text().await.map_err(|e| {
-            tracing::error!("Drive client get_sheet_content decode error: {:?}", e);
+            tracing::error!("Drive client get_content decode error: {:?}", e);
             ApiError::internal("Invalid response from drive service")
         })
     }
 
-    pub async fn upload_sheet_content(
+    pub async fn upload_content(
         &self,
         token: &str,
         file_id: &str,
         content: &str,
+        label: &str,
     ) -> Result<(), ApiError> {
         let part = reqwest::multipart::Part::bytes(content.as_bytes().to_vec())
             .file_name("content.json")
@@ -207,12 +215,13 @@ impl DriveClient {
             .send()
             .await
             .map_err(|e| {
-                tracing::error!("Drive client upload_sheet_content error: {:?}", e);
+                tracing::error!("Drive client {} error: {:?}", label, e);
                 ApiError::internal("Failed to reach drive service")
             })?;
         if !resp.status().is_success() {
             tracing::error!(
-                "Drive service upload_sheet_content returned {}",
+                "Drive service {} returned {}",
+                label,
                 resp.status()
             );
             return Err(ApiError::internal("Drive service error"));

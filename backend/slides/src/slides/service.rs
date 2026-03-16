@@ -4,7 +4,14 @@ use crate::slides::{
     model::{NewSlideRecord, UpdateSlideRecord},
     repository::SlidesRepository,
 };
-use crate::drive_client::DriveClient;
+
+fn content_urls(file_id: &str) -> (String, String) {
+    (
+        format!("/api/v1/drive/files/{}", file_id),
+        format!("/api/v1/drive/files/{}/versions", file_id),
+    )
+}
+use shared::drive_client::DriveClient;
 use chrono::Utc;
 use std::sync::Arc;
 use uuid::Uuid;
@@ -24,7 +31,7 @@ impl SlidesService {
     }
 
     pub async fn list_slides(&self, user: &AuthenticatedUser) -> Result<ListSlidesResponse, ApiError> {
-        let items = self.drive.list_slides(&user.token, &MIME_TYPE).await?;
+        let items = self.drive.list_files(&user.token, MIME_TYPE).await?;
         let slides = items
             .into_iter()
             .map(|item| SlideMetaResponse {
@@ -50,19 +57,21 @@ impl SlidesService {
         let id = Uuid::new_v4().to_string();
         let file = self
             .drive
-            .register_slide(&user.token, &id, &title, MIME_TYPE, req.folder_id.as_deref())
+            .create_file(&user.token, &id, &title, MIME_TYPE, req.folder_id.as_deref())
             .await?;
         let new_slide = NewSlideRecord { file_id: &id };
         self.repo.insert_slide(new_slide)?;
 
         self.drive
-            .upload_slide_content(&user.token, &id, EMPTY_SLIDES_CONTENT)
+            .upload_content(&user.token, &id, EMPTY_SLIDES_CONTENT, "upload_slide_content")
             .await?;
 
+        let (content_url, content_write_url) = content_urls(&id);
         Ok(SlideResponse {
             id: file.id,
             title: file.name,
-            content: EMPTY_SLIDES_CONTENT.to_string(),
+            content_url,
+            content_write_url,
             folder_id: file.folder_id,
             created_at: file.created_at.and_utc().to_rfc3339(),
             updated_at: file.updated_at.and_utc().to_rfc3339(),
@@ -74,18 +83,19 @@ impl SlidesService {
         user: &AuthenticatedUser,
         slide_id: &str,
     ) -> Result<SlideResponse, ApiError> {
-        let file = self.drive.get_file(&user.token, slide_id).await?;
+        let file = self
+            .drive
+            .get_file(&user.token, slide_id, "Presentation not found")
+            .await?;
         if file.deleted_at.is_some() {
             return Err(ApiError::not_found("Presentation is in trash"));
         }
-        let content = match file.storage_path {
-            Some(_) => self.drive.get_slide_content(&user.token, slide_id).await?,
-            None => EMPTY_SLIDES_CONTENT.to_string(),
-        };
+        let (content_url, content_write_url) = content_urls(slide_id);
         Ok(SlideResponse {
             id: file.id,
             title: file.name,
-            content,
+            content_url,
+            content_write_url,
             folder_id: file.folder_id,
             created_at: file.created_at.and_utc().to_rfc3339(),
             updated_at: file.updated_at.and_utc().to_rfc3339(),
@@ -98,7 +108,10 @@ impl SlidesService {
         slide_id: &str,
         req: SaveSlideRequest,
     ) -> Result<SlideMetaResponse, ApiError> {
-        let file = self.drive.get_file(&user.token, slide_id).await?;
+        let file = self
+            .drive
+            .get_file(&user.token, slide_id, "Presentation not found")
+            .await?;
         match file.your_role.as_str() {
             "owner" | "editor" => {}
             _ => return Err(ApiError::new(403, "FORBIDDEN", "Edit access required")),
@@ -118,12 +131,6 @@ impl SlidesService {
         } else {
             file.name.clone()
         };
-
-        if let Some(ref content) = req.content {
-            self.drive
-                .upload_slide_content(&user.token, slide_id, content)
-                .await?;
-        }
 
         let now = Utc::now().naive_utc();
         let changes = UpdateSlideRecord { updated_at: now };

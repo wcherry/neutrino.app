@@ -22,7 +22,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, FileText, Download, Upload, ChevronDown, Settings,
 } from 'lucide-react';
-import { docsApi, type PageSetup } from '@/lib/api';
+import { docsApi, driveReadContent, driveWriteContent, type PageSetup } from '@/lib/api';
 import { Toolbar } from './Toolbar';
 import { DocOutline } from './DocOutline';
 import styles from './page.module.css';
@@ -151,16 +151,25 @@ export function DocEditor() {
   const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingContent = useRef<string | null>(null);
 
-  const { data: doc, isLoading } = useQuery({
+  const { data: doc, isLoading: metaLoading } = useQuery({
     queryKey: ['doc', docId],
     queryFn: () => docsApi.getDoc(docId),
     staleTime: 0,
     enabled: !!docId,
   });
 
-  const saveMutation = useMutation({
-    mutationFn: (body: Parameters<typeof docsApi.saveDoc>[1]) =>
-      docsApi.saveDoc(docId, body),
+  const { data: docContent, isLoading: contentLoading } = useQuery({
+    queryKey: ['doc-content', docId],
+    queryFn: () => driveReadContent(doc!.contentUrl),
+    enabled: !!doc?.contentUrl,
+    staleTime: 0,
+  });
+
+  const isLoading = metaLoading || contentLoading;
+
+  const contentMutation = useMutation({
+    mutationFn: (content: string) =>
+      driveWriteContent(doc!.contentWriteUrl, content, 'doc.json'),
     onMutate: () => setSaveStatus('saving'),
     onSuccess: () => {
       setSaveStatus('saved');
@@ -169,11 +178,16 @@ export function DocEditor() {
     onError: () => setSaveStatus('unsaved'),
   });
 
+  const metaMutation = useMutation({
+    mutationFn: (body: Parameters<typeof docsApi.saveDoc>[1]) =>
+      docsApi.saveDoc(docId, body),
+  });
+
   const triggerSave = useCallback(
-    (content: string, currentTitle: string, currentPageSetup: PageSetup) => {
-      saveMutation.mutate({ content, title: currentTitle, pageSetup: currentPageSetup });
+    (content: string) => {
+      contentMutation.mutate(content);
     },
-    [saveMutation]
+    [contentMutation]
   );
 
   const editor = useEditor({
@@ -203,7 +217,7 @@ export function DocEditor() {
       setSaveStatus('unsaved');
       if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
       autoSaveTimer.current = setTimeout(() => {
-        triggerSave(content, title, pageSetup);
+        triggerSave(content);
       }, AUTO_SAVE_DELAY_MS);
     },
   });
@@ -212,13 +226,17 @@ export function DocEditor() {
     if (!doc || !editor) return;
     setTitle(doc.title);
     setPageSetup(doc.pageSetup);
+  }, [doc, editor]);
+
+  useEffect(() => {
+    if (!docContent || !editor) return;
     try {
-      const json = JSON.parse(doc.content);
+      const json = JSON.parse(docContent);
       editor.commands.setContent(json, false);
     } catch {
-      editor.commands.setContent(doc.content, false);
+      editor.commands.setContent(docContent, false);
     }
-  }, [doc, editor]);
+  }, [docContent, editor]);
 
   useEffect(() => {
     return () => {
@@ -228,14 +246,12 @@ export function DocEditor() {
 
   const handleTitleBlur = () => {
     if (!title.trim() || title === doc?.title) return;
-    const content = pendingContent.current ?? doc?.content ?? '';
-    triggerSave(content, title, pageSetup);
+    metaMutation.mutate({ title });
   };
 
   const handlePageSetupSave = (ps: PageSetup) => {
     setPageSetup(ps);
-    const content = pendingContent.current ?? doc?.content ?? '';
-    triggerSave(content, title, ps);
+    metaMutation.mutate({ pageSetup: ps });
   };
 
   const handleInsertImage = () => {
