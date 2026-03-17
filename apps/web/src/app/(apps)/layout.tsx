@@ -20,6 +20,7 @@ import {
   FileTextIcon,
   FileSpreadsheet,
   Presentation,
+  Image as ImageIcon,
 } from 'lucide-react';
 import { authApi, storageApi, type UserProfile, type QuotaInfo } from '@/lib/api';
 
@@ -28,6 +29,7 @@ const NAV_SECTIONS: NavSection[] = [
     id: 'main',
     items: [
       { id: 'my-drive', label: 'My Drive', icon: HardDrive, href: '/drive', active: true },
+      { id: 'photos', label: 'Photos', icon: ImageIcon, href: '/photos' },
       { id: 'docs', label: 'Docs', icon: FileTextIcon, href: '/docs' },
       { id: 'sheets', label: 'Sheets', icon: FileSpreadsheet, href: '/sheets' },
       { id: 'slides', label: 'Slides', icon: Presentation, href: '/slides' },

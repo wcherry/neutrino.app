@@ -3,9 +3,10 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Download, Upload, ChevronDown, Table2 } from 'lucide-react';
+import { ArrowLeft, Download, Upload, ChevronDown, Table2, History } from 'lucide-react';
 import { Button } from '@neutrino/ui';
 import { sheetsApi, driveReadContent, driveWriteContent } from '@/lib/api';
+import { VersionHistoryPanel } from '@/components/VersionHistoryPanel';
 import styles from './page.module.css';
 
 // ── Export helpers ──────────────────────────────────────────────────────────
@@ -100,6 +101,7 @@ export function SheetEditor() {
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('saved');
   const [exportOpen, setExportOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
   const importInputRef = useRef<HTMLInputElement>(null);
   const exportRef = useRef<HTMLDivElement>(null);
   const importRef = useRef<HTMLDivElement>(null);
@@ -340,13 +342,33 @@ export function SheetEditor() {
               </div>
             )}
           </div>
+
+          <Button
+            variant="secondary"
+            icon={<History size={16} />}
+            onClick={() => setShowHistory((v) => !v)}
+            style={{ opacity: showHistory ? 1 : 0.7 }}
+          >
+            History
+          </Button>
         </div>
       </div>
 
-      {/* Spreadsheet grid */}
-      <div className={styles.gridArea}>
-        {mounted && (
-          <FortuneSheetWorkbook data={fortuneData} onChange={handleChange} />
+      {/* Spreadsheet grid + history panel */}
+      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+        <div className={styles.gridArea}>
+          {mounted && (
+            <FortuneSheetWorkbook data={fortuneData} onChange={handleChange} />
+          )}
+        </div>
+        {showHistory && (
+          <VersionHistoryPanel
+            fileId={sheetId}
+            onRestore={() => {
+              queryClient.invalidateQueries({ queryKey: ['sheet-content', sheetId] });
+            }}
+            onClose={() => setShowHistory(false)}
+          />
         )}
       </div>
     </div>

@@ -538,6 +538,19 @@ export const storageApi = {
   async listVersions(fileId: string): Promise<ListVersionsResponse> {
     return request<ListVersionsResponse>(`/api/v1/drive/files/${fileId}/versions`);
   },
+
+  async labelVersion(fileId: string, versionId: string, label: string): Promise<FileVersionItem> {
+    return request<FileVersionItem>(`/api/v1/drive/files/${fileId}/versions/${versionId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ label }),
+    });
+  },
+
+  async restoreVersion(fileId: string, versionId: string): Promise<void> {
+    return request<void>(`/api/v1/drive/files/${fileId}/versions/${versionId}/restore`, {
+      method: 'POST',
+    });
+  },
 };
 
 // ---------------------------------------------------------------------------
@@ -1168,6 +1181,205 @@ export const slidesApi = {
       method: 'PATCH',
       body: JSON.stringify(body),
     });
+  },
+};
+
+// ---------------------------------------------------------------------------
+// Photos API (Phase 3.5)
+// ---------------------------------------------------------------------------
+
+export interface PhotoResponse {
+  id: string;
+  fileId: string;
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+  /** URL to read/stream the media via Drive API */
+  contentUrl: string;
+  /** URL to fetch the icon-sized thumbnail, null if not yet generated */
+  thumbnailUrl: string | null;
+  isStarred: boolean;
+  isArchived: boolean;
+  captureDate: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ListPhotosResponse {
+  photos: PhotoResponse[];
+  total: number;
+}
+
+export interface RegisterPhotoRequest {
+  fileId: string;
+  captureDate?: string | null;
+}
+
+export interface UpdatePhotoRequest {
+  isStarred?: boolean;
+  isArchived?: boolean;
+}
+
+export interface AlbumResponse {
+  id: string;
+  title: string;
+  description: string | null;
+  photoCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ListAlbumsResponse {
+  albums: AlbumResponse[];
+}
+
+export interface CreateAlbumRequest {
+  title: string;
+  description?: string | null;
+}
+
+export interface UpdateAlbumRequest {
+  title?: string;
+  description?: string | null;
+}
+
+export const photosApi = {
+  async listPhotos(opts?: {
+    archivedOnly?: boolean;
+    starredOnly?: boolean;
+  }): Promise<ListPhotosResponse> {
+    const qs = buildQuery({
+      archivedOnly: opts?.archivedOnly,
+      starredOnly: opts?.starredOnly,
+    });
+    return request<ListPhotosResponse>(`/api/v1/photos${qs}`);
+  },
+
+  async registerPhoto(body: RegisterPhotoRequest): Promise<PhotoResponse> {
+    return request<PhotoResponse>('/api/v1/photos', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  },
+
+  async getPhoto(photoId: string): Promise<PhotoResponse> {
+    return request<PhotoResponse>(`/api/v1/photos/${photoId}`);
+  },
+
+  async updatePhoto(photoId: string, body: UpdatePhotoRequest): Promise<PhotoResponse> {
+    return request<PhotoResponse>(`/api/v1/photos/${photoId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    });
+  },
+
+  async trashPhoto(photoId: string): Promise<void> {
+    return request<void>(`/api/v1/photos/${photoId}`, { method: 'DELETE' });
+  },
+
+  async restorePhoto(photoId: string): Promise<PhotoResponse> {
+    return request<PhotoResponse>(`/api/v1/photos/${photoId}/restore`, { method: 'POST' });
+  },
+
+  async listTrash(): Promise<ListPhotosResponse> {
+    return request<ListPhotosResponse>('/api/v1/photos/trash');
+  },
+
+  async emptyTrash(): Promise<void> {
+    return request<void>('/api/v1/photos/trash', { method: 'DELETE' });
+  },
+
+  /** Upload a media file to Drive then register it in Photos. Returns the photo record. */
+  async uploadPhoto(
+    file: File,
+    onProgress?: (percent: number) => void,
+  ): Promise<PhotoResponse> {
+    const fileItem = await new Promise<FileItem>((resolve, reject) => {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const xhr = new XMLHttpRequest();
+
+      xhr.upload.addEventListener('progress', (e) => {
+        if (e.lengthComputable && onProgress) {
+          onProgress(Math.round((e.loaded / e.total) * 100));
+        }
+      });
+
+      xhr.addEventListener('load', () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          try {
+            resolve(JSON.parse(xhr.responseText) as FileItem);
+          } catch {
+            reject(new Error('Invalid response from server'));
+          }
+        } else {
+          try {
+            const err = JSON.parse(xhr.responseText) as ApiError;
+            reject(new ApiClientError(xhr.status, err.error.code, err.error.message));
+          } catch {
+            reject(new ApiClientError(xhr.status, 'UPLOAD_ERROR', `Upload failed: ${xhr.status}`));
+          }
+        }
+      });
+
+      xhr.addEventListener('error', () => reject(new Error('Network error during upload')));
+      xhr.addEventListener('abort', () => reject(new Error('Upload aborted')));
+
+      const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+      xhr.open('POST', `${BASE_URL}/api/v1/drive/files/upload`);
+      if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+      xhr.send(formData);
+    });
+
+    return request<PhotoResponse>('/api/v1/photos', {
+      method: 'POST',
+      body: JSON.stringify({ fileId: fileItem.id } satisfies RegisterPhotoRequest),
+    });
+  },
+
+  getPhotoStreamUrl(fileId: string): string {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : '';
+    return `${BASE_URL}/api/v1/drive/files/${fileId}?token=${token ?? ''}`;
+  },
+};
+
+export const albumsApi = {
+  async listAlbums(): Promise<ListAlbumsResponse> {
+    return request<ListAlbumsResponse>('/api/v1/albums');
+  },
+
+  async createAlbum(body: CreateAlbumRequest): Promise<AlbumResponse> {
+    return request<AlbumResponse>('/api/v1/albums', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  },
+
+  async getAlbum(albumId: string): Promise<AlbumResponse> {
+    return request<AlbumResponse>(`/api/v1/albums/${albumId}`);
+  },
+
+  async updateAlbum(albumId: string, body: UpdateAlbumRequest): Promise<AlbumResponse> {
+    return request<AlbumResponse>(`/api/v1/albums/${albumId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    });
+  },
+
+  async deleteAlbum(albumId: string): Promise<void> {
+    return request<void>(`/api/v1/albums/${albumId}`, { method: 'DELETE' });
+  },
+
+  async addPhoto(albumId: string, photoId: string): Promise<void> {
+    return request<void>(`/api/v1/albums/${albumId}/items`, {
+      method: 'POST',
+      body: JSON.stringify({ photoId }),
+    });
+  },
+
+  async removePhoto(albumId: string, photoId: string): Promise<void> {
+    return request<void>(`/api/v1/albums/${albumId}/items/${photoId}`, { method: 'DELETE' });
   },
 };
 

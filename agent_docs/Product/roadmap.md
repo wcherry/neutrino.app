@@ -151,23 +151,23 @@ A phased roadmap for building a Google Drive-competitive cloud storage and colla
 - [x] File size limit: 100 MB (converted from PPTX)
 
 ### 3.4 Editor Infrastructure
-- [ ] Auto-save (no manual save required)
-- [ ] In-editor revision history (view, restore, name versions)
-- [ ] Templates gallery (Docs: resume, letter; Sheets: budget, invoice; Slides: pitch deck, etc.)
-- [ ] Offline editing via service worker / browser cache (Chrome/Edge)
+- [x] Auto-save (no manual save required)
+- [x] In-editor revision history (view, restore, name versions)
+- [x] Templates gallery (Docs: resume, letter; Sheets: budget, invoice; Slides: pitch deck, etc.)
+- [x] Offline editing via service worker / browser cache (Chrome/Edge)
 
 ### 3.5 Photos (Media Library)
-- [ ] Dedicated Photos section: separate from Drive file browser, infinite-scroll grid by capture date
-- [ ] Auto backup: mobile apps upload camera roll automatically (Wi-Fi only or cellular, user-configurable)
-- [ ] Supported formats: JPEG, PNG, GIF, WebP, HEIC, RAW (common camera formats), MP4, MOV, AVI, WebM
-- [ ] Albums: create manual albums; auto-albums for trips (location + date), events, and favorites
-- [ ] Favorites: star photos/videos to collect in a "Favorites" album
-- [ ] Archive: move items out of main stream without deleting
-- [ ] Trash: 60-day retention before permanent deletion
-- [ ] Shared albums: collaborative albums where multiple users can add photos and leave comments/likes
-- [ ] Shared library: grant a trusted contact access to your full library (or a subset by person/date)
-- [ ] Link sharing: share individual photos or albums via link; control whether recipients can save
-- [ ] Export: download original-quality library via bulk export (ZIP)
+- [x] Dedicated Photos section: separate from Drive file browser, infinite-scroll grid by capture date
+- [x] Auto backup: mobile apps upload camera roll automatically (Wi-Fi only or cellular, user-configurable)
+- [x] Supported formats: JPEG, PNG, GIF, WebP, HEIC, RAW (common camera formats), MP4, MOV, AVI, WebM
+- [x] Albums: create manual albums; auto-albums for trips (location + date), events, and favorites
+- [x] Favorites: star photos/videos to collect in a "Favorites" album
+- [x] Archive: move items out of main stream without deleting
+- [x] Trash: 60-day retention before permanent deletion
+- [x] Shared albums: collaborative albums where multiple users can add photos and leave comments/likes
+- [x] Shared library: grant a trusted contact access to your full library (or a subset by person/date)
+- [x] Link sharing: share individual photos or albums via link; control whether recipients can save
+- [x] Export: download original-quality library via bulk export (ZIP)
 
 ---
 

@@ -3,6 +3,7 @@ members = [
     "auth",
     "docs",
     "drive",
+    "photos",
     "shared",
     "sheets",
     "slides",

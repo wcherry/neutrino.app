@@ -11,11 +11,11 @@ pub struct Config {
 
 impl Config {
     pub fn from_env() -> Result<Self, String> {
-        let database_url = env::var("SHEETS_DATABASE_URL")
+        let database_url = env::var("PHOTOS_DATABASE_URL")
             .or_else(|_| env::var("DATABASE_URL"))
-            .unwrap_or_else(|_| "sheets.db".to_string());
+            .unwrap_or_else(|_| "photos.db".to_string());
 
-        let port = env::var("SHEETS_PORT")
+        let port = env::var("PHOTOS_PORT")
             .or_else(|_| env::var("PORT"))
             .unwrap_or_else(|_| "8080".to_string())
             .parse::<u16>()

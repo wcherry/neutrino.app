@@ -1,0 +1,330 @@
+'use client';
+
+import React, { useRef, useState, useCallback } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Button, Heading, Spinner } from '@neutrino/ui';
+import {
+  Image as ImageIcon,
+  Upload,
+  Star,
+  Archive,
+  Trash2,
+  FolderOpen,
+  Plus,
+  X,
+} from 'lucide-react';
+import {
+  photosApi,
+  albumsApi,
+  type PhotoResponse,
+  type AlbumResponse,
+} from '@/lib/api';
+import styles from './page.module.css';
+
+type FilterTab = 'all' | 'favorites' | 'archive' | 'albums';
+
+function formatDate(iso: string): string {
+  return new Date(iso).toLocaleDateString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
+}
+
+function isImageMime(mime: string): boolean {
+  return mime.startsWith('image/');
+}
+
+function isVideoMime(mime: string): boolean {
+  return mime.startsWith('video/');
+}
+
+function PhotoCard({
+  photo,
+  onStar,
+  onArchive,
+  onTrash,
+}: {
+  photo: PhotoResponse;
+  onStar: (photo: PhotoResponse) => void;
+  onArchive: (photo: PhotoResponse) => void;
+  onTrash: (photo: PhotoResponse) => void;
+}) {
+  const streamUrl = photosApi.getPhotoStreamUrl(photo.fileId);
+
+  return (
+    <div className={styles.photoCard}>
+      {isImageMime(photo.mimeType) ? (
+        <img src={streamUrl} alt={photo.fileName} className={styles.photoImg} loading="lazy" />
+      ) : isVideoMime(photo.mimeType) ? (
+        <video src={streamUrl} className={styles.photoImg} muted playsInline />
+      ) : (
+        <div className={styles.photoPlaceholder}>
+          <ImageIcon size={32} />
+          <span>{photo.fileName}</span>
+        </div>
+      )}
+
+      <div className={styles.photoOverlay}>
+        <div className={styles.photoOverlayTop}>
+          <button
+            className={styles.iconBtn}
+            onClick={(e) => { e.stopPropagation(); onStar(photo); }}
+            title={photo.isStarred ? 'Unstar' : 'Star'}
+          >
+            <Star size={14} className={photo.isStarred ? styles.starredIcon : undefined} fill={photo.isStarred ? 'currentColor' : 'none'} />
+          </button>
+          <button
+            className={styles.iconBtn}
+            onClick={(e) => { e.stopPropagation(); onArchive(photo); }}
+            title={photo.isArchived ? 'Unarchive' : 'Archive'}
+          >
+            <Archive size={14} />
+          </button>
+          <button
+            className={styles.iconBtn}
+            onClick={(e) => { e.stopPropagation(); onTrash(photo); }}
+            title="Move to trash"
+          >
+            <Trash2 size={14} />
+          </button>
+        </div>
+        <div className={styles.photoOverlayBottom}>
+          <span className={styles.photoName}>{photo.fileName}</span>
+          <span className={styles.photoDate}>{formatDate(photo.createdAt)}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AlbumCard({ album }: { album: AlbumResponse }) {
+  return (
+    <div className={styles.albumCard}>
+      <div className={styles.albumCover}>
+        <FolderOpen size={40} />
+      </div>
+      <div className={styles.albumInfo}>
+        <p className={styles.albumTitle}>{album.title}</p>
+        <p className={styles.albumCount}>{album.photoCount} {album.photoCount === 1 ? 'photo' : 'photos'}</p>
+      </div>
+    </div>
+  );
+}
+
+export default function PhotosPage() {
+  const queryClient = useQueryClient();
+  const [activeTab, setActiveTab] = useState<FilterTab>('all');
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [newAlbumTitle, setNewAlbumTitle] = useState('');
+  const [showNewAlbum, setShowNewAlbum] = useState(false);
+  const uploadInputRef = useRef<HTMLInputElement>(null);
+
+  const photosQuery = useQuery({
+    queryKey: ['photos', activeTab],
+    queryFn: () => {
+      if (activeTab === 'favorites') return photosApi.listPhotos({ starredOnly: true });
+      if (activeTab === 'archive') return photosApi.listPhotos({ archivedOnly: true });
+      if (activeTab === 'albums') return photosApi.listPhotos();
+      return photosApi.listPhotos();
+    },
+    enabled: activeTab !== 'albums',
+  });
+
+  const albumsQuery = useQuery({
+    queryKey: ['albums'],
+    queryFn: () => albumsApi.listAlbums(),
+    enabled: activeTab === 'albums',
+  });
+
+  const uploadMutation = useMutation({
+    mutationFn: (file: File) =>
+      photosApi.uploadPhoto(file, (pct) => setUploadProgress(pct)),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['photos'] });
+      setUploadProgress(null);
+      setUploadError(null);
+    },
+    onError: (err) => {
+      setUploadError(err instanceof Error ? err.message : 'Upload failed');
+      setUploadProgress(null);
+    },
+  });
+
+  const starMutation = useMutation({
+    mutationFn: (photo: PhotoResponse) =>
+      photosApi.updatePhoto(photo.id, { isStarred: !photo.isStarred }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['photos'] }),
+  });
+
+  const archiveMutation = useMutation({
+    mutationFn: (photo: PhotoResponse) =>
+      photosApi.updatePhoto(photo.id, { isArchived: !photo.isArchived }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['photos'] }),
+  });
+
+  const trashMutation = useMutation({
+    mutationFn: (photo: PhotoResponse) => photosApi.trashPhoto(photo.id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['photos'] }),
+  });
+
+  const createAlbumMutation = useMutation({
+    mutationFn: () => albumsApi.createAlbum({ title: newAlbumTitle.trim() }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['albums'] });
+      setNewAlbumTitle('');
+      setShowNewAlbum(false);
+    },
+  });
+
+  const handleFileInput = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
+    files.forEach((file) => uploadMutation.mutate(file));
+    e.target.value = '';
+  }, [uploadMutation]);
+
+  const photos = photosQuery.data?.photos ?? [];
+  const albums = albumsQuery.data?.albums ?? [];
+  const isLoading = photosQuery.isLoading || albumsQuery.isLoading;
+
+  return (
+    <div className={styles.page}>
+      <input
+        ref={uploadInputRef}
+        type="file"
+        accept="image/*,video/*,.heic,.heif,.raw,.cr2,.nef,.arw,.dng"
+        multiple
+        style={{ display: 'none' }}
+        onChange={handleFileInput}
+      />
+
+      <div className={styles.header}>
+        <Heading level={1} size="xl">Photos</Heading>
+        <div className={styles.headerActions}>
+          {uploadProgress !== null && (
+            <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-secondary)' }}>
+              Uploading {uploadProgress}%
+            </span>
+          )}
+          <Button
+            variant="secondary"
+            onClick={() => uploadInputRef.current?.click()}
+            disabled={uploadMutation.isPending}
+            icon={<Upload size={16} />}
+          >
+            Upload
+          </Button>
+        </div>
+      </div>
+
+      {uploadError && (
+        <div className={styles.errorBanner}>
+          {uploadError}
+          <button onClick={() => setUploadError(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit' }}>
+            <X size={16} />
+          </button>
+        </div>
+      )}
+
+      <div className={styles.filterTabs}>
+        {(['all', 'favorites', 'archive', 'albums'] as FilterTab[]).map((tab) => (
+          <button
+            key={tab}
+            className={`${styles.filterTab} ${activeTab === tab ? styles.filterTabActive : ''}`}
+            onClick={() => setActiveTab(tab)}
+          >
+            {tab === 'all' && 'All Photos'}
+            {tab === 'favorites' && 'Favorites'}
+            {tab === 'archive' && 'Archive'}
+            {tab === 'albums' && 'Albums'}
+          </button>
+        ))}
+      </div>
+
+      {isLoading ? (
+        <div style={{ display: 'flex', justifyContent: 'center', padding: 'var(--space-16)' }}>
+          <Spinner size="lg" />
+        </div>
+      ) : activeTab === 'albums' ? (
+        <div className={styles.albumsSection}>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)' }}>
+            {showNewAlbum ? (
+              <>
+                <input
+                  autoFocus
+                  value={newAlbumTitle}
+                  onChange={(e) => setNewAlbumTitle(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && newAlbumTitle.trim()) createAlbumMutation.mutate();
+                    if (e.key === 'Escape') setShowNewAlbum(false);
+                  }}
+                  placeholder="Album title"
+                  style={{ padding: 'var(--space-1) var(--space-2)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', fontSize: 'var(--font-size-sm)' }}
+                />
+                <Button
+                  onClick={() => createAlbumMutation.mutate()}
+                  disabled={!newAlbumTitle.trim() || createAlbumMutation.isPending}
+                >
+                  Create
+                </Button>
+                <Button variant="ghost" onClick={() => setShowNewAlbum(false)}>
+                  Cancel
+                </Button>
+              </>
+            ) : (
+              <Button icon={<Plus size={16} />} onClick={() => setShowNewAlbum(true)}>
+                New Album
+              </Button>
+            )}
+          </div>
+
+          {albums.length === 0 ? (
+            <div className={styles.emptyState}>
+              <FolderOpen size={48} className={styles.emptyIcon} />
+              <p>No albums yet. Create one to organize your photos.</p>
+            </div>
+          ) : (
+            <div className={styles.albumGrid}>
+              {albums.map((album) => (
+                <AlbumCard key={album.id} album={album} />
+              ))}
+            </div>
+          )}
+        </div>
+      ) : photos.length === 0 ? (
+        <div
+          className={styles.uploadZone}
+          onClick={() => uploadInputRef.current?.click()}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => e.key === 'Enter' && uploadInputRef.current?.click()}
+        >
+          <ImageIcon size={48} className={styles.emptyIcon} />
+          <p className={styles.uploadZoneText}>
+            {activeTab === 'favorites'
+              ? 'No starred photos yet. Star photos to see them here.'
+              : activeTab === 'archive'
+              ? 'No archived photos.'
+              : 'Drop photos here or click to upload'}
+          </p>
+          {activeTab === 'all' && (
+            <Button icon={<Upload size={16} />}>Upload Photos</Button>
+          )}
+        </div>
+      ) : (
+        <div className={styles.photoGrid}>
+          {photos.map((photo) => (
+            <PhotoCard
+              key={photo.id}
+              photo={photo}
+              onStar={(p) => starMutation.mutate(p)}
+              onArchive={(p) => archiveMutation.mutate(p)}
+              onTrash={(p) => trashMutation.mutate(p)}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}

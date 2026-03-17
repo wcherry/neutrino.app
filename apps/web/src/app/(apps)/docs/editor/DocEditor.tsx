@@ -20,11 +20,12 @@ import CharacterCount from '@tiptap/extension-character-count';
 import Highlight from '@tiptap/extension-highlight';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  ArrowLeft, FileText, Download, Upload, ChevronDown, Settings,
+  ArrowLeft, FileText, Download, Upload, ChevronDown, Settings, History,
 } from 'lucide-react';
 import { docsApi, driveReadContent, driveWriteContent, type PageSetup } from '@/lib/api';
 import { Toolbar } from './Toolbar';
 import { DocOutline } from './DocOutline';
+import { VersionHistoryPanel } from '@/components/VersionHistoryPanel';
 import styles from './page.module.css';
 
 // ── DOCX / PDF export helpers ──────────────────────────────────────────────
@@ -147,6 +148,7 @@ export function DocEditor() {
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [showPageSetup, setShowPageSetup] = useState(false);
   const [showOutline, setShowOutline] = useState(true);
+  const [showHistory, setShowHistory] = useState(false);
   const importInputRef = useRef<HTMLInputElement>(null);
   const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingContent = useRef<string | null>(null);
@@ -363,6 +365,15 @@ export function DocEditor() {
           >
             ≡ Outline
           </button>
+
+          <button
+            className={styles.exportBtn}
+            onClick={() => setShowHistory(v => !v)}
+            title="Version history"
+            style={{ opacity: showHistory ? 1 : 0.5 }}
+          >
+            <History size={14} /> History
+          </button>
         </div>
       </div>
 
@@ -379,6 +390,15 @@ export function DocEditor() {
             </div>
           </div>
         </div>
+        {showHistory && (
+          <VersionHistoryPanel
+            fileId={docId}
+            onRestore={() => {
+              queryClient.invalidateQueries({ queryKey: ['doc-content', docId] });
+            }}
+            onClose={() => setShowHistory(false)}
+          />
+        )}
       </div>
 
       {/* ── Status bar ── */}
