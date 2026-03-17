@@ -73,6 +73,72 @@ services:
       - ./logs/docs:/usr/local/logs
       - ./data/drive:/usr/local/data
 
+  sheets:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      args:
+        SERVICE: sheets
+    container_name: neutrino-sheets-service
+    ports:
+      - "8884:8080"
+    environment:
+      JWT_SECRET: your-secret-key-here-change-in-production
+      JWT_ACCESS_EXPIRY_SECS: 900
+      JWT_REFRESH_EXPIRY_SECS: 604800
+      LOG_LEVEL: debug
+      AUTH_URL: http://auth:8080/
+      SHEETS_DATABASE_URL: /usr/local/data/sheets.db
+      SHEETS_PORT: 8080
+      LOG_PATH: /usr/local/logs/
+    volumes:
+      - ./logs/sheets:/usr/local/logs
+      - ./data/drive:/usr/local/data
+
+  slides:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      args:
+        SERVICE: slides
+    container_name: neutrino-slides-service
+    ports:
+      - "8885:8080"
+    environment:
+      JWT_SECRET: your-secret-key-here-change-in-production
+      JWT_ACCESS_EXPIRY_SECS: 900
+      JWT_REFRESH_EXPIRY_SECS: 604800
+      LOG_LEVEL: debug
+      AUTH_URL: http://auth:8080/
+      SLIDES_DATABASE_URL: /usr/local/data/slides.db
+      SLIDES_PORT: 8080
+      LOG_PATH: /usr/local/logs/
+    volumes:
+      - ./logs/slides:/usr/local/logs
+      - ./data/drive:/usr/local/data
+
+  photos:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      args:
+        SERVICE: photos
+    container_name: neutrino-photos-service
+    ports:
+      - "8886:8080"
+    environment:
+      JWT_SECRET: your-secret-key-here-change-in-production
+      JWT_ACCESS_EXPIRY_SECS: 900
+      JWT_REFRESH_EXPIRY_SECS: 604800
+      LOG_LEVEL: debug
+      AUTH_URL: http://auth:8080/
+      PHOTOS_DATABASE_URL: /usr/local/data/photos.db
+      PHOTOS_PORT: 8080
+      LOG_PATH: /usr/local/logs/
+    volumes:
+      - ./logs/photos:/usr/local/logs
+      - ./data/drive:/usr/local/data
+
   worker:
     build:
       context: ./backend
@@ -80,3 +146,16 @@ services:
       args:
         SERVICE: worker
     container_name: neutrino-worker
+    environment:
+      WORKER_SECRET: your-secret-key-here-change-in-production
+      LOG_LEVEL: debug
+      AUTH_URL: http://auth:8080/
+      PHOTO_URL: http://photos:8080/
+      DRIVE_URL: http://drive:8080/
+      PHOTOS_DATABASE_URL: /usr/local/data/workers.db
+      PHOTOS_PORT: 8080
+      LOG_PATH: /usr/local/logs/
+    volumes:
+      - ./logs/photos:/usr/local/logs
+      - ./data/drive:/usr/local/data
+

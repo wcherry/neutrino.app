@@ -40,6 +40,10 @@ jobs:
             context: ./backend
             dockerfile: ./backend/Dockerfile
             build_args: SERVICE=slides
+          - image: photos
+            context: ./backend
+            dockerfile: ./backend/Dockerfile
+            build_args: SERVICE=photos
           - image: worker
             context: ./backend
             dockerfile: ./backend/Dockerfile

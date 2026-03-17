@@ -54,7 +54,7 @@ export default function SlidesPage() {
       const fileName = file.name.replace(/\.pptx$/i, '') || 'Imported presentation';
       const slide = await slidesApi.createSlide({ title: fileName });
       const presentation = await importFromPptx(file);
-      await slidesApi.saveSlide(slide.id, { content: JSON.stringify(presentation), title: fileName });
+      await slidesApi.saveSlide(slide.id, { title: fileName });
       return slide;
     },
     onSuccess: (slide) => router.push(`/slides/editor?id=${slide.id}`),
