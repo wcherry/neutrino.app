@@ -105,7 +105,12 @@ async fn main() -> std::io::Result<()> {
     let photos_repo = Arc::new(PhotosRepository::new(pool.clone()));
     let albums_repo = Arc::new(AlbumsRepository::new(pool.clone()));
 
-    let photos_service = Arc::new(PhotosService::new(photos_repo.clone(), drive_client.clone()));
+    let photos_service = Arc::new(PhotosService::new(
+        photos_repo.clone(),
+        drive_client.clone(),
+        config.drive_base_url.clone(),
+        config.worker_secret.clone(),
+    ));
     let albums_service = Arc::new(AlbumsService::new(albums_repo, photos_repo));
 
     let photos_state = web::Data::new(PhotosApiState { photos_service });

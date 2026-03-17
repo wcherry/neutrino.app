@@ -12,6 +12,7 @@ COPY drive/Cargo.toml drive/
 COPY docs/Cargo.toml docs/
 COPY sheets/Cargo.toml sheets/
 COPY slides/Cargo.toml slides/
+COPY photos/Cargo.toml photos/
 COPY worker/Cargo.toml worker/
 
 # Create dummy source files to build dependency cache
@@ -20,12 +21,14 @@ RUN mkdir -p auth/src \
  && mkdir -p docs/src \
  && mkdir -p sheets/src \
  && mkdir -p slides/src \
+ && mkdir -p photos/src \
  && mkdir -p worker/src \
  && echo "fn main(){}" > auth/src/main.rs \
  && echo "fn main(){}" > drive/src/main.rs \
  && echo "fn main(){}" > docs/src/main.rs \
  && echo "fn main(){}" > sheets/src/main.rs \
  && echo "fn main(){}" > slides/src/main.rs \
+ && echo "fn main(){}" > photos/src/main.rs \
  && echo "fn main(){}" > worker/src/main.rs 
 
 RUN cargo build --release --workspace
@@ -40,6 +43,7 @@ COPY drive drive
 COPY docs docs
 COPY sheets sheets
 COPY slides slides
+COPY photos photos
 COPY worker worker
 
 # Build selected service

@@ -12,6 +12,7 @@ mod access_requests;
 mod config;
 mod filesystem;
 mod irm;
+mod jobs;
 mod permissions;
 mod schema;
 mod common;
@@ -34,6 +35,11 @@ use crate::irm::{
     api::{IrmApiDoc, IrmApiState},
     repository::IrmRepository,
     service::IrmService,
+};
+use crate::jobs::{
+    api::{JobsApiState, WorkerSecretData},
+    repository::JobsRepository,
+    service::JobsService,
 };
 use crate::permissions::{
     api::{PermissionsApiDoc, PermissionsApiState},
@@ -218,6 +224,24 @@ async fn main() -> std::io::Result<()> {
         service: access_requests_service,
     });
 
+    // Jobs setup
+    let jobs_repo = Arc::new(JobsRepository::new(pool.clone()));
+    let jobs_service = Arc::new(JobsService::new(jobs_repo, config.storage_path.clone(), config.jobs_per_worker));
+    let jobs_state = web::Data::new(JobsApiState {
+        jobs_service: jobs_service.clone(),
+    });
+    let worker_secret_data = web::Data::new(WorkerSecretData(config.worker_secret.clone()));
+
+    // Background task: reset timed-out jobs and dispatch ready jobs to workers.
+    let jobs_bg = jobs_service.clone();
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(5));
+        loop {
+            interval.tick().await;
+            jobs_bg.process_background_tasks().await;
+        }
+    });
+
     let token_service_data = web::Data::new(token_service.clone());
 
     let pool_data = web::Data::new(pool.clone());
@@ -251,6 +275,8 @@ async fn main() -> std::io::Result<()> {
             .app_data(access_requests_state.clone())
             .app_data(irm_state.clone())
             .app_data(workspace_state.clone())
+            .app_data(jobs_state.clone())
+            .app_data(worker_secret_data.clone())
             .app_data(token_service_data.clone())
             .wrap(Logger::default())
             .wrap(Cors::permissive())
@@ -266,7 +292,8 @@ async fn main() -> std::io::Result<()> {
             )
             .service(
                 web::scope("/api/v1")
-                    .configure(sharing::api::configure_public),
+                    .configure(sharing::api::configure_public)
+                    .configure(jobs::api::configure),
             )
             .service(
                 web::scope("/api/v1/admin")

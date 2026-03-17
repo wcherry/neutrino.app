@@ -8,6 +8,9 @@ pub struct Config {
     pub log_level: String,
     pub storage_path: String,
     pub max_upload_bytes: u64,
+    pub worker_secret: String,
+    /// How many jobs to fetch per registered worker in each dispatch cycle.
+    pub jobs_per_worker: usize,
 }
 
 impl Config {
@@ -38,6 +41,19 @@ impl Config {
             .parse::<u64>()
             .map_err(|e| format!("Invalid MAX_UPLOAD_BYTES: {}", e))?;
 
+        let worker_secret = env::var("WORKER_SECRET")
+            .map_err(|_| "WORKER_SECRET environment variable is required")?;
+
+        if worker_secret.is_empty() {
+            return Err("WORKER_SECRET must not be empty".to_string());
+        }
+
+        let jobs_per_worker = env::var("JOBS_PER_WORKER")
+            .unwrap_or_else(|_| "4".to_string())
+            .parse::<usize>()
+            .unwrap_or(4)
+            .max(1);
+
         Ok(Config {
             database_url,
             port,
@@ -45,6 +61,8 @@ impl Config {
             log_level,
             storage_path,
             max_upload_bytes,
+            worker_secret,
+            jobs_per_worker,
         })
     }
 }

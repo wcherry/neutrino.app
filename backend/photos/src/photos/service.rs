@@ -13,11 +13,25 @@ use uuid::Uuid;
 pub struct PhotosService {
     repo: Arc<PhotosRepository>,
     drive: Arc<DriveClient>,
+    drive_base_url: String,
+    worker_secret: String,
+    http: reqwest::Client,
 }
 
 impl PhotosService {
-    pub fn new(repo: Arc<PhotosRepository>, drive: Arc<DriveClient>) -> Self {
-        PhotosService { repo, drive }
+    pub fn new(
+        repo: Arc<PhotosRepository>,
+        drive: Arc<DriveClient>,
+        drive_base_url: String,
+        worker_secret: String,
+    ) -> Self {
+        PhotosService {
+            repo,
+            drive,
+            drive_base_url,
+            worker_secret,
+            http: reqwest::Client::new(),
+        }
     }
 
     pub async fn register_photo(
@@ -42,7 +56,7 @@ impl PhotosService {
         let id = Uuid::new_v4().to_string();
         let new_photo = NewPhotoRecord {
             id: &id,
-            user_id: &user.id,
+            user_id: &user.user_id,
             file_id: &req.file_id,
             is_starred: false,
             is_archived: false,
@@ -52,6 +66,11 @@ impl PhotosService {
             thumbnail_mime_type: None,
         };
         let photo = self.repo.insert_photo(new_photo)?;
+
+        // Enqueue thumbnail job via drive API — failure is non-fatal.
+        if let Err(e) = self.enqueue_thumbnail_job(&id, &req.file_id).await {
+            tracing::warn!("Failed to enqueue thumbnail job for photo {}: {}", id, e);
+        }
 
         Ok(self.to_response(
             photo,
@@ -63,6 +82,28 @@ impl PhotosService {
         ))
     }
 
+    async fn enqueue_thumbnail_job(&self, photo_id: &str, file_id: &str) -> Result<(), String> {
+        let url = format!("{}/api/v1/jobs", self.drive_base_url);
+        let body = serde_json::json!({
+            "jobType": "thumbnail",
+            "payload": { "photoId": photo_id, "fileId": file_id },
+            "timeoutSecs": 30
+        });
+        let resp = self
+            .http
+            .post(&url)
+            .header("Authorization", format!("Bearer {}", self.worker_secret))
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| format!("HTTP error: {}", e))?;
+        if resp.status().is_success() {
+            Ok(())
+        } else {
+            Err(format!("Drive jobs API returned {}", resp.status()))
+        }
+    }
+
     pub async fn list_photos(
         &self,
         user: &AuthenticatedUser,
@@ -71,7 +112,7 @@ impl PhotosService {
     ) -> Result<ListPhotosResponse, ApiError> {
         let records = self
             .repo
-            .list_photos(&user.id, include_archived, starred_only)?;
+            .list_photos(&user.user_id, include_archived, starred_only)?;
         let mut responses = Vec::with_capacity(records.len());
         for r in &records {
             let file = self
@@ -106,7 +147,7 @@ impl PhotosService {
         photo_id: &str,
     ) -> Result<PhotoResponse, ApiError> {
         let photo = self.repo.get_photo(photo_id)?;
-        if photo.user_id != user.id {
+        if photo.user_id != user.user_id {
             return Err(ApiError::new(403, "FORBIDDEN", "Access denied"));
         }
         let file = self
@@ -130,7 +171,7 @@ impl PhotosService {
         req: UpdatePhotoRequest,
     ) -> Result<PhotoResponse, ApiError> {
         let photo = self.repo.get_photo(photo_id)?;
-        if photo.user_id != user.id {
+        if photo.user_id != user.user_id {
             return Err(ApiError::new(403, "FORBIDDEN", "Access denied"));
         }
 
@@ -163,7 +204,7 @@ impl PhotosService {
         photo_id: &str,
     ) -> Result<(), ApiError> {
         let photo = self.repo.get_photo(photo_id)?;
-        if photo.user_id != user.id {
+        if photo.user_id != user.user_id {
             return Err(ApiError::new(403, "FORBIDDEN", "Access denied"));
         }
         let changes = UpdatePhotoRecord {
@@ -184,7 +225,7 @@ impl PhotosService {
         photo_id: &str,
     ) -> Result<PhotoResponse, ApiError> {
         let photo = self.repo.get_photo_including_deleted(photo_id)?;
-        if photo.user_id != user.id {
+        if photo.user_id != user.user_id {
             return Err(ApiError::new(403, "FORBIDDEN", "Access denied"));
         }
         if photo.deleted_at.is_none() {
@@ -217,7 +258,7 @@ impl PhotosService {
         &self,
         user: &AuthenticatedUser,
     ) -> Result<ListPhotosResponse, ApiError> {
-        let records = self.repo.list_trash(&user.id)?;
+        let records = self.repo.list_trash(&user.user_id)?;
         let mut responses = Vec::with_capacity(records.len());
         for r in &records {
             let file = self
@@ -247,24 +288,20 @@ impl PhotosService {
     }
 
     pub fn empty_trash(&self, user: &AuthenticatedUser) -> Result<(), ApiError> {
-        self.repo.empty_trash(&user.id)?;
+        self.repo.empty_trash(&user.user_id)?;
         Ok(())
     }
 
-    /// Called by the worker to store a generated thumbnail for a photo.
-    /// The photo must exist (not necessarily owned — worker uses internal auth).
     pub fn save_thumbnail(
         &self,
         photo_id: &str,
         data: Vec<u8>,
         mime_type: String,
     ) -> Result<(), ApiError> {
-        // Ensure the photo exists before writing
         self.repo.get_photo_including_deleted(photo_id)?;
         self.repo.set_thumbnail(photo_id, data, mime_type)
     }
 
-    /// Returns the raw thumbnail bytes and MIME type, if available.
     pub fn get_thumbnail(&self, photo_id: &str) -> Result<Option<(Vec<u8>, String)>, ApiError> {
         self.repo.get_thumbnail(photo_id)
     }

@@ -27,7 +27,7 @@ impl AlbumsService {
     }
 
     pub fn list_albums(&self, user: &AuthenticatedUser) -> Result<ListAlbumsResponse, ApiError> {
-        let records = self.albums_repo.list_albums(&user.id)?;
+        let records = self.albums_repo.list_albums(&user.user_id)?;
         let albums = records
             .into_iter()
             .map(|r| {
@@ -57,7 +57,7 @@ impl AlbumsService {
         let id = Uuid::new_v4().to_string();
         let new_album = NewAlbumRecord {
             id: &id,
-            user_id: &user.id,
+            user_id: &user.user_id,
             title: &title,
             description: req.description.as_deref(),
         };
@@ -78,7 +78,7 @@ impl AlbumsService {
         album_id: &str,
     ) -> Result<AlbumResponse, ApiError> {
         let album = self.albums_repo.get_album(album_id)?;
-        if album.user_id != user.id {
+        if album.user_id != user.user_id {
             return Err(ApiError::new(403, "FORBIDDEN", "Access denied"));
         }
         let count = self.albums_repo.count_album_photos(album_id)?;
@@ -99,7 +99,7 @@ impl AlbumsService {
         req: UpdateAlbumRequest,
     ) -> Result<AlbumResponse, ApiError> {
         let album = self.albums_repo.get_album(album_id)?;
-        if album.user_id != user.id {
+        if album.user_id != user.user_id {
             return Err(ApiError::new(403, "FORBIDDEN", "Access denied"));
         }
         let changes = UpdateAlbumRecord {
@@ -128,7 +128,7 @@ impl AlbumsService {
         album_id: &str,
     ) -> Result<(), ApiError> {
         let album = self.albums_repo.get_album(album_id)?;
-        if album.user_id != user.id {
+        if album.user_id != user.user_id {
             return Err(ApiError::new(403, "FORBIDDEN", "Access denied"));
         }
         self.albums_repo.delete_album(album_id)
@@ -141,12 +141,12 @@ impl AlbumsService {
         req: AddPhotoToAlbumRequest,
     ) -> Result<(), ApiError> {
         let album = self.albums_repo.get_album(album_id)?;
-        if album.user_id != user.id {
+        if album.user_id != user.user_id {
             return Err(ApiError::new(403, "FORBIDDEN", "Access denied"));
         }
         // Verify the photo belongs to the user
         let photo = self.photos_repo.get_photo(&req.photo_id)?;
-        if photo.user_id != user.id {
+        if photo.user_id != user.user_id {
             return Err(ApiError::new(403, "FORBIDDEN", "Access denied"));
         }
         self.albums_repo.add_photo_to_album(album_id, &req.photo_id)
@@ -159,7 +159,7 @@ impl AlbumsService {
         photo_id: &str,
     ) -> Result<(), ApiError> {
         let album = self.albums_repo.get_album(album_id)?;
-        if album.user_id != user.id {
+        if album.user_id != user.user_id {
             return Err(ApiError::new(403, "FORBIDDEN", "Access denied"));
         }
         self.albums_repo.remove_photo_from_album(album_id, photo_id)

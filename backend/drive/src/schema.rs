@@ -141,6 +141,30 @@ diesel::table! {
     }
 }
 
+diesel::table! {
+    worker_jobs (id) {
+        id -> Text,
+        job_type -> Text,
+        payload -> Text,
+        status -> Text,
+        error_message -> Nullable<Text>,
+        worker_id -> Nullable<Text>,
+        timeout_secs -> Integer,
+        started_at -> Nullable<Timestamp>,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    worker_registrations (id) {
+        id -> Text,
+        callback_url -> Text,
+        registered_at -> Timestamp,
+        last_seen_at -> Timestamp,
+    }
+}
+
 diesel::joinable!(files -> folders (folder_id));
 diesel::joinable!(shortcuts -> files (target_file_id));
 diesel::joinable!(file_versions -> files (file_id));

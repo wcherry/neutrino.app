@@ -7,6 +7,7 @@ pub struct Config {
     pub jwt_secret: String,
     pub log_level: String,
     pub drive_base_url: String,
+    pub worker_secret: String,
 }
 
 impl Config {
@@ -33,12 +34,20 @@ impl Config {
         let drive_base_url =
             env::var("DRIVE_URL").unwrap_or_else(|_| "http://localhost:8882".to_string());
 
+        let worker_secret = env::var("WORKER_SECRET")
+            .map_err(|_| "WORKER_SECRET environment variable is required")?;
+
+        if worker_secret.is_empty() {
+            return Err("WORKER_SECRET must not be empty".to_string());
+        }
+
         Ok(Config {
             database_url,
             port,
             jwt_secret,
             log_level,
             drive_base_url,
+            worker_secret,
         })
     }
 }
