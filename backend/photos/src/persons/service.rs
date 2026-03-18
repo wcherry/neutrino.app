@@ -1,7 +1,8 @@
 use crate::persons::{
     dto::{
         ClusterEntry, FaceEmbeddingEntry, FaceEmbeddingsResponse, ListPersonsResponse,
-        PersonFaceThumbnail, PersonResponse, SaveClustersRequest, UsersWithFacesResponse,
+        MergePersonsRequest, PersonFaceThumbnail, PersonResponse, ReassignFaceRequest,
+        RenamePersonRequest, SaveClustersRequest, UsersWithFacesResponse,
     },
     repository::PersonsRepository,
 };
@@ -18,11 +19,28 @@ impl PersonsService {
         PersonsService { repo }
     }
 
+    fn person_response_from_record(
+        &self,
+        p: crate::persons::model::PersonRecord,
+        faces: Vec<PersonFaceThumbnail>,
+    ) -> PersonResponse {
+        PersonResponse {
+            id: p.id,
+            name: p.name,
+            cover_face_id: p.cover_face_id,
+            cover_thumbnail: p.cover_thumbnail,
+            cover_thumbnail_mime_type: p.cover_thumbnail_mime_type,
+            face_count: p.face_count,
+            faces,
+            created_at: p.created_at.and_utc().to_rfc3339(),
+            updated_at: p.updated_at.and_utc().to_rfc3339(),
+        }
+    }
+
     pub fn list_persons(&self, user_id: &str) -> Result<ListPersonsResponse, ApiError> {
         let records = self.repo.list_persons_for_user(user_id)?;
         let total = records.len();
 
-        // Load all faces for these persons in one query, then group by person_id.
         let person_ids: Vec<String> = records.iter().map(|p| p.id.clone()).collect();
         let all_faces = if person_ids.is_empty() {
             vec![]
@@ -46,19 +64,77 @@ impl PersonsService {
             .into_iter()
             .map(|p| {
                 let faces = faces_by_person.remove(&p.id).unwrap_or_default();
-                PersonResponse {
-                    id: p.id,
-                    cover_face_id: p.cover_face_id,
-                    cover_thumbnail: p.cover_thumbnail,
-                    cover_thumbnail_mime_type: p.cover_thumbnail_mime_type,
-                    face_count: p.face_count,
-                    faces,
-                    created_at: p.created_at.and_utc().to_rfc3339(),
-                    updated_at: p.updated_at.and_utc().to_rfc3339(),
-                }
+                self.person_response_from_record(p, faces)
             })
             .collect();
         Ok(ListPersonsResponse { persons, total })
+    }
+
+    /// Rename a person; checks that the caller owns the person.
+    pub fn rename_person(
+        &self,
+        person_id: &str,
+        user_id: &str,
+        req: RenamePersonRequest,
+    ) -> Result<PersonResponse, ApiError> {
+        let name = req.name.trim().to_string();
+        if name.is_empty() {
+            return Err(ApiError::new(400, "INVALID_NAME", "Name must not be empty"));
+        }
+        let now = chrono::Utc::now().naive_utc();
+        let record = self.repo.update_person_name(person_id, user_id, &name, now)?;
+        let faces = self.repo.list_faces_for_person(person_id)?.into_iter().map(|f| PersonFaceThumbnail {
+            id: f.id,
+            thumbnail: f.thumbnail,
+            thumbnail_mime_type: f.thumbnail_mime_type,
+        }).collect();
+        Ok(self.person_response_from_record(record, faces))
+    }
+
+    /// Merge source person into target person (target absorbs all faces).
+    pub fn merge_persons(
+        &self,
+        target_id: &str,
+        user_id: &str,
+        req: MergePersonsRequest,
+    ) -> Result<PersonResponse, ApiError> {
+        if req.source_id == target_id {
+            return Err(ApiError::new(400, "INVALID_MERGE", "Cannot merge a person with themselves"));
+        }
+        let now = chrono::Utc::now().naive_utc();
+        let record = self.repo.merge_persons(&req.source_id, target_id, user_id, now)?;
+        let faces = self.repo.list_faces_for_person(target_id)?.into_iter().map(|f| PersonFaceThumbnail {
+            id: f.id,
+            thumbnail: f.thumbnail,
+            thumbnail_mime_type: f.thumbnail_mime_type,
+        }).collect();
+        Ok(self.person_response_from_record(record, faces))
+    }
+
+    /// Move a face from one person to another.
+    pub fn reassign_face(
+        &self,
+        person_id: &str,
+        face_id: &str,
+        user_id: &str,
+        req: ReassignFaceRequest,
+    ) -> Result<(), ApiError> {
+        if req.target_person_id == person_id {
+            return Ok(());
+        }
+        let now = chrono::Utc::now().naive_utc();
+        self.repo.reassign_face(face_id, person_id, &req.target_person_id, user_id, now)
+    }
+
+    /// Remove a face from a person (unassigns it). Deletes the person if now empty.
+    pub fn remove_face_from_person(
+        &self,
+        person_id: &str,
+        face_id: &str,
+        user_id: &str,
+    ) -> Result<(), ApiError> {
+        let now = chrono::Utc::now().naive_utc();
+        self.repo.remove_face_from_person(face_id, person_id, user_id, now)
     }
 
     /// Returns all user_ids that have at least one face embedding (called by the worker to trigger cluster-all).

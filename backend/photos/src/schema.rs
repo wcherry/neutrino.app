@@ -58,6 +58,7 @@ diesel::table! {
         cover_thumbnail -> Nullable<Text>,
         cover_thumbnail_mime_type -> Nullable<Text>,
         face_count -> Integer,
+        name -> Nullable<Text>,
         created_at -> Timestamp,
         updated_at -> Timestamp,
     }

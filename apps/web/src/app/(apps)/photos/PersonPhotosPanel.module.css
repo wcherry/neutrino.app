@@ -13,6 +13,7 @@
   padding: var(--space-3) var(--space-4);
   border-bottom: 1px solid var(--color-border, #e5e7eb);
   background: var(--color-surface-subtle, #f9fafb);
+  gap: var(--space-2);
 }
 
 .headerInfo {
@@ -126,4 +127,184 @@
   justify-content: center;
   background: var(--color-surface-subtle, #f3f4f6);
   color: var(--color-text-tertiary, #9ca3af);
+}
+
+/* ── Rename ────────────────────────────────────────────────────────────────── */
+
+.renameRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.renameInput {
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  padding: 2px var(--space-1);
+  border: 1px solid var(--color-primary, #4f46e5);
+  border-radius: var(--radius-sm);
+  outline: none;
+  width: 140px;
+  color: var(--color-text, #111827);
+  background: var(--color-surface, #fff);
+}
+
+.iconAction {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 3px;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-secondary, #6b7280);
+  transition: background 0.1s, color 0.1s;
+  flex-shrink: 0;
+}
+
+.iconAction:hover {
+  background: var(--color-surface-hover, #f3f4f6);
+  color: var(--color-text, #111827);
+}
+
+/* ── Header actions ────────────────────────────────────────────────────────── */
+
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex-shrink: 0;
+}
+
+/* ── Merge dropdown ────────────────────────────────────────────────────────── */
+
+.mergeWrapper {
+  position: relative;
+}
+
+.mergeDropdown {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 50;
+  background: var(--color-surface, #fff);
+  border: 1px solid var(--color-border, #e5e7eb);
+  border-radius: var(--radius-md);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.10);
+  min-width: 180px;
+  padding: var(--space-1) 0;
+}
+
+.mergeLabel {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary, #6b7280);
+  padding: var(--space-1) var(--space-3);
+  margin: 0;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.mergeOption {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: var(--font-size-sm);
+  color: var(--color-text, #111827);
+  text-align: left;
+  transition: background 0.1s;
+}
+
+.mergeOption:hover {
+  background: var(--color-surface-subtle, #f9fafb);
+}
+
+.mergeOption:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.mergeOptionCount {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary, #6b7280);
+}
+
+/* ── Faces section ─────────────────────────────────────────────────────────── */
+
+.facesSection {
+  padding: var(--space-2) var(--space-4);
+  border-bottom: 1px solid var(--color-border, #e5e7eb);
+}
+
+.sectionLabel {
+  font-size: var(--font-size-xs);
+  font-weight: 500;
+  color: var(--color-text-secondary, #6b7280);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin: 0 0 var(--space-2);
+}
+
+.facesStrip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.faceItem {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+}
+
+.faceThumb {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border, #e5e7eb);
+  display: block;
+}
+
+.faceThumbPlaceholder {
+  width: 100%;
+  height: 100%;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border, #e5e7eb);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-surface-subtle, #f3f4f6);
+  color: var(--color-text-tertiary, #9ca3af);
+}
+
+.faceRemoveBtn {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--color-danger, #ef4444);
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  opacity: 0;
+  transition: opacity 0.15s;
+  padding: 0;
+}
+
+.faceItem:hover .faceRemoveBtn {
+  opacity: 1;
 }

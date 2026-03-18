@@ -1281,6 +1281,7 @@ export interface PersonFaceThumbnail {
 
 export interface PersonResponse {
   id: string;
+  name: string | null;
   coverFaceId: string | null;
   coverThumbnail: string | null;
   coverThumbnailMimeType: string | null;
@@ -1393,7 +1394,33 @@ export const personsApi = {
     return request<ListPersonsResponse>('/api/v1/photos/persons/list');
   },
   async listPersonPhotos(personId: string): Promise<ListPhotosResponse> {
-    return request<ListPhotosResponse>(`/api/v1/photo/persons/${personId}/photos`);
+    return request<ListPhotosResponse>(`/api/v1/photos/persons/${personId}/photos`);
+  },
+  async renamePerson(personId: string, name: string): Promise<PersonResponse> {
+    return request<PersonResponse>(`/api/v1/photos/persons/${personId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name }),
+    });
+  },
+  async mergePersons(targetId: string, sourceId: string): Promise<PersonResponse> {
+    return request<PersonResponse>(`/api/v1/photos/persons/${targetId}/merge`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sourceId }),
+    });
+  },
+  async reassignFace(personId: string, faceId: string, targetPersonId: string): Promise<void> {
+    return request<void>(`/api/v1/photos/persons/${personId}/faces/${faceId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ targetPersonId }),
+    });
+  },
+  async removeFace(personId: string, faceId: string): Promise<void> {
+    return request<void>(`/api/v1/photos/persons/${personId}/faces/${faceId}`, {
+      method: 'DELETE',
+    });
   },
 };
 

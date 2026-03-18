@@ -94,25 +94,25 @@ Allow users to assign names and manage identity for clustered faces.
 Features
 
 Person Management
-	[ ]	Add editable Person entity (name, avatar)
-	[ ]	Assign name to a cluster
-	[ ]	Persist identity across sessions
+	[x]	Add editable Person entity (name, avatar)
+	[x]	Assign name to a cluster
+	[x]	Persist identity across sessions
 
 Cluster Controls
-	[ ]	Merge clusters (combine two people)
-	[ ]	Split cluster (remove incorrect faces)
+	[x]	Merge clusters (combine two people)
+	[x]	Split cluster (remove incorrect faces)
 	[ ]	Reassign individual faces to different person
 
 UI — People Management
-	[ ]	Add editable name field to person view
-	[ ]	Create person detail page
-	[ ]	Display all photos for selected person
-	[ ]	Allow inline rename interaction
+	[x]	Add editable name field to person view
+	[x]	Create person detail page
+	[x]	Display all photos for selected person
+	[x]	Allow inline rename interaction
 
 UI — Actions
-	[ ]	Add “Name this person” action
-	[ ]	Add merge UI (multi-select clusters)
-	[ ]	Add remove/reassign controls
+	[x]	Add “Name this person” action
+	[x]	Add merge UI (multi-select clusters)
+	[x]	Add remove/reassign controls
 
 Validation Steps
 	1.	Open unnamed cluster

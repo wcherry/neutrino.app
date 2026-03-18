@@ -6,6 +6,7 @@ use actix_web::{get, post, web, HttpResponse};
 use shared::auth::AuthenticatedUser;
 use shared::ApiError;
 use std::sync::Arc;
+use tracing::debug;
 
 pub struct FacesApiState {
     pub faces_service: Arc<FacesService>,
@@ -32,7 +33,9 @@ pub async fn save_face(
     body: web::Json<SaveFaceRequest>,
 ) -> Result<HttpResponse, ApiError> {
     let photo_id = path.into_inner();
-    let face: FaceResponse = state.faces_service.save_face(&photo_id, body.into_inner())?;
+    let body = body.into_inner();
+    debug!("SAVE_FACE: {:?}", &body);
+    let face: FaceResponse = state.faces_service.save_face(&photo_id, body)?;
     Ok(HttpResponse::Created().json(face))
 }
 

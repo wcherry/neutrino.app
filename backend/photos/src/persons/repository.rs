@@ -46,10 +46,228 @@ impl PersonsRepository {
             .filter(persons::id.eq(person_id))
             .select(PersonRecord::as_select())
             .first(&mut conn)
-            .map_err(|e| {
-                tracing::error!("DB get person error: {:?}", e);
-                ApiError::not_found("Person not found")
-            })
+            .map_err(|_| ApiError::not_found("Person not found"))
+    }
+
+    /// Update the display name of a person; returns the updated record.
+    pub fn update_person_name(
+        &self,
+        person_id: &str,
+        user_id: &str,
+        name: &str,
+        now: NaiveDateTime,
+    ) -> Result<PersonRecord, ApiError> {
+        let mut conn = self.get_conn()?;
+        diesel::update(
+            persons::table
+                .filter(persons::id.eq(person_id))
+                .filter(persons::user_id.eq(user_id)),
+        )
+        .set((
+            persons::name.eq(name),
+            persons::updated_at.eq(now),
+        ))
+        .execute(&mut conn)
+        .map_err(|e| {
+            tracing::error!("DB update person name error: {:?}", e);
+            ApiError::internal("Database error")
+        })?;
+
+        self.get_person(person_id)
+    }
+
+    /// Move all faces from `source_id` into `target_id`, then delete the source person.
+    /// The target's face_count is updated; the source is removed.
+    pub fn merge_persons(
+        &self,
+        source_id: &str,
+        target_id: &str,
+        user_id: &str,
+        now: NaiveDateTime,
+    ) -> Result<PersonRecord, ApiError> {
+        let mut conn = self.get_conn()?;
+        conn.transaction::<PersonRecord, diesel::result::Error, _>(|conn| {
+            // Verify both persons exist and belong to the user.
+            let source = persons::table
+                .filter(persons::id.eq(source_id))
+                .filter(persons::user_id.eq(user_id))
+                .select(PersonRecord::as_select())
+                .first(conn)?;
+            let target = persons::table
+                .filter(persons::id.eq(target_id))
+                .filter(persons::user_id.eq(user_id))
+                .select(PersonRecord::as_select())
+                .first(conn)?;
+
+            // Reassign all faces from source → target.
+            diesel::update(faces::table.filter(faces::person_id.eq(source_id)))
+                .set(faces::person_id.eq(target_id))
+                .execute(conn)?;
+
+            // Update target face_count.
+            let new_count = target.face_count + source.face_count;
+            diesel::update(
+                persons::table
+                    .filter(persons::id.eq(target_id))
+                    .filter(persons::user_id.eq(user_id)),
+            )
+            .set((
+                persons::face_count.eq(new_count),
+                persons::updated_at.eq(now),
+            ))
+            .execute(conn)?;
+
+            // Delete the source person.
+            diesel::delete(
+                persons::table
+                    .filter(persons::id.eq(source_id))
+                    .filter(persons::user_id.eq(user_id)),
+            )
+            .execute(conn)?;
+
+            // Return updated target.
+            persons::table
+                .filter(persons::id.eq(target_id))
+                .select(PersonRecord::as_select())
+                .first(conn)
+        })
+        .map_err(|e| {
+            tracing::error!("DB merge persons error: {:?}", e);
+            ApiError::internal("Database error")
+        })
+    }
+
+    /// Move a single face to a different person; updates both persons' face_counts.
+    pub fn reassign_face(
+        &self,
+        face_id: &str,
+        from_person_id: &str,
+        target_person_id: &str,
+        user_id: &str,
+        now: NaiveDateTime,
+    ) -> Result<(), ApiError> {
+        let mut conn = self.get_conn()?;
+        conn.transaction::<(), diesel::result::Error, _>(|conn| {
+            // Verify target belongs to user.
+            persons::table
+                .filter(persons::id.eq(target_person_id))
+                .filter(persons::user_id.eq(user_id))
+                .select(persons::id)
+                .first::<String>(conn)?;
+
+            // Reassign the face.
+            diesel::update(
+                faces::table
+                    .filter(faces::id.eq(face_id))
+                    .filter(faces::person_id.eq(from_person_id)),
+            )
+            .set(faces::person_id.eq(target_person_id))
+            .execute(conn)?;
+
+            // Decrement source face_count (delete if it reaches 0).
+            let source = persons::table
+                .filter(persons::id.eq(from_person_id))
+                .filter(persons::user_id.eq(user_id))
+                .select(PersonRecord::as_select())
+                .first(conn)?;
+            if source.face_count <= 1 {
+                diesel::delete(
+                    persons::table
+                        .filter(persons::id.eq(from_person_id))
+                        .filter(persons::user_id.eq(user_id)),
+                )
+                .execute(conn)?;
+            } else {
+                diesel::update(
+                    persons::table
+                        .filter(persons::id.eq(from_person_id))
+                        .filter(persons::user_id.eq(user_id)),
+                )
+                .set((
+                    persons::face_count.eq(source.face_count - 1),
+                    persons::updated_at.eq(now),
+                ))
+                .execute(conn)?;
+            }
+
+            // Increment target face_count.
+            let target = persons::table
+                .filter(persons::id.eq(target_person_id))
+                .filter(persons::user_id.eq(user_id))
+                .select(PersonRecord::as_select())
+                .first(conn)?;
+            diesel::update(
+                persons::table
+                    .filter(persons::id.eq(target_person_id))
+                    .filter(persons::user_id.eq(user_id)),
+            )
+            .set((
+                persons::face_count.eq(target.face_count + 1),
+                persons::updated_at.eq(now),
+            ))
+            .execute(conn)?;
+
+            Ok(())
+        })
+        .map_err(|e| {
+            tracing::error!("DB reassign face error: {:?}", e);
+            ApiError::internal("Database error")
+        })
+    }
+
+    /// Remove a face from a person (sets person_id = NULL). Deletes the person if empty.
+    pub fn remove_face_from_person(
+        &self,
+        face_id: &str,
+        person_id: &str,
+        user_id: &str,
+        now: NaiveDateTime,
+    ) -> Result<(), ApiError> {
+        let mut conn = self.get_conn()?;
+        conn.transaction::<(), diesel::result::Error, _>(|conn| {
+            // Verify person belongs to user.
+            let person = persons::table
+                .filter(persons::id.eq(person_id))
+                .filter(persons::user_id.eq(user_id))
+                .select(PersonRecord::as_select())
+                .first(conn)?;
+
+            // Clear the face's person_id.
+            diesel::update(
+                faces::table
+                    .filter(faces::id.eq(face_id))
+                    .filter(faces::person_id.eq(person_id)),
+            )
+            .set(faces::person_id.eq::<Option<&str>>(None))
+            .execute(conn)?;
+
+            // Decrement or delete the person.
+            if person.face_count <= 1 {
+                diesel::delete(
+                    persons::table
+                        .filter(persons::id.eq(person_id))
+                        .filter(persons::user_id.eq(user_id)),
+                )
+                .execute(conn)?;
+            } else {
+                diesel::update(
+                    persons::table
+                        .filter(persons::id.eq(person_id))
+                        .filter(persons::user_id.eq(user_id)),
+                )
+                .set((
+                    persons::face_count.eq(person.face_count - 1),
+                    persons::updated_at.eq(now),
+                ))
+                .execute(conn)?;
+            }
+
+            Ok(())
+        })
+        .map_err(|e| {
+            tracing::error!("DB remove face from person error: {:?}", e);
+            ApiError::internal("Database error")
+        })
     }
 
     /// Return all distinct user_ids that have at least one face with an embedding.
@@ -151,6 +369,7 @@ impl PersonsRepository {
                     cover_thumbnail: cover_thumb.as_deref(),
                     cover_thumbnail_mime_type: cover_thumb_mime.as_deref(),
                     face_count: face_ids.len() as i32,
+                    name: None,
                     created_at: now,
                     updated_at: now,
                 };

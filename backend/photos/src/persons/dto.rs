@@ -12,6 +12,7 @@ pub struct PersonFaceThumbnail {
 #[serde(rename_all = "camelCase")]
 pub struct PersonResponse {
     pub id: String,
+    pub name: Option<String>,
     pub cover_face_id: Option<String>,
     pub cover_thumbnail: Option<String>,
     pub cover_thumbnail_mime_type: Option<String>,
@@ -27,6 +28,28 @@ pub struct PersonResponse {
 pub struct ListPersonsResponse {
     pub persons: Vec<PersonResponse>,
     pub total: usize,
+}
+
+// ── Person management requests ─────────────────────────────────────────────
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RenamePersonRequest {
+    pub name: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MergePersonsRequest {
+    /// The person whose faces get moved into the target (will be deleted).
+    pub source_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReassignFaceRequest {
+    /// The person this face should be moved to.
+    pub target_person_id: String,
 }
 
 // ── Internal (worker) endpoints ────────────────────────────────────────────

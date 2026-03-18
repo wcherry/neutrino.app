@@ -184,6 +184,7 @@ function PersonCard({ person, onClick }: { person: PersonResponse; onClick: () =
           })
         )}
       </div>
+      <p className={styles.personName}>{person.name ?? 'Unknown person'}</p>
       <p className={styles.personCount}>{person.faceCount} {person.faceCount === 1 ? 'photo' : 'photos'}</p>
     </div>
   );
@@ -469,7 +470,16 @@ export default function PhotosPage() {
       {selectedPerson && (
         <PersonPhotosPanel
           person={selectedPerson}
+          allPersons={persons}
           onClose={() => setSelectedPerson(null)}
+          onPersonUpdated={(updated) => {
+            setSelectedPerson(updated);
+            queryClient.invalidateQueries({ queryKey: ['persons'] });
+          }}
+          onPersonDeleted={() => {
+            setSelectedPerson(null);
+            queryClient.invalidateQueries({ queryKey: ['persons'] });
+          }}
         />
       )}
 

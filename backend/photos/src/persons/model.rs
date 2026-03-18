@@ -12,6 +12,7 @@ pub struct PersonRecord {
     pub cover_thumbnail: Option<String>,
     pub cover_thumbnail_mime_type: Option<String>,
     pub face_count: i32,
+    pub name: Option<String>,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
 }
@@ -25,6 +26,7 @@ pub struct NewPersonRecord<'a> {
     pub cover_thumbnail: Option<&'a str>,
     pub cover_thumbnail_mime_type: Option<&'a str>,
     pub face_count: i32,
+    pub name: Option<&'a str>,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
 }

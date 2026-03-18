@@ -1,9 +1,12 @@
 use crate::persons::{
-    dto::{FaceEmbeddingsResponse, ListPersonsResponse, SaveClustersRequest, UsersWithFacesResponse},
+    dto::{
+        FaceEmbeddingsResponse, ListPersonsResponse, MergePersonsRequest, PersonResponse,
+        ReassignFaceRequest, RenamePersonRequest, SaveClustersRequest, UsersWithFacesResponse,
+    },
     service::PersonsService,
 };
 use crate::photos::{dto::ListPhotosResponse, service::PhotosService};
-use actix_web::{get, post, web, HttpResponse};
+use actix_web::{delete, get, patch, post, web, HttpResponse};
 use shared::auth::AuthenticatedUser;
 use shared::ApiError;
 use std::sync::Arc;
@@ -21,6 +24,65 @@ pub async fn list_persons(
 ) -> Result<web::Json<ListPersonsResponse>, ApiError> {
     let result = state.persons_service.list_persons(&user.user_id)?;
     Ok(web::Json(result))
+}
+
+/// Rename a person cluster.
+#[patch("/photos/persons/{personId}")]
+pub async fn rename_person(
+    state: web::Data<PersonsApiState>,
+    user: AuthenticatedUser,
+    path: web::Path<String>,
+    body: web::Json<RenamePersonRequest>,
+) -> Result<web::Json<PersonResponse>, ApiError> {
+    let person_id = path.into_inner();
+    let result = state
+        .persons_service
+        .rename_person(&person_id, &user.user_id, body.into_inner())?;
+    Ok(web::Json(result))
+}
+
+/// Merge another person cluster into this one (source is absorbed and deleted).
+#[post("/photos/persons/{personId}/merge")]
+pub async fn merge_persons(
+    state: web::Data<PersonsApiState>,
+    user: AuthenticatedUser,
+    path: web::Path<String>,
+    body: web::Json<MergePersonsRequest>,
+) -> Result<web::Json<PersonResponse>, ApiError> {
+    let target_id = path.into_inner();
+    let result = state
+        .persons_service
+        .merge_persons(&target_id, &user.user_id, body.into_inner())?;
+    Ok(web::Json(result))
+}
+
+/// Move a face from this person to a different person.
+#[patch("/photos/persons/{personId}/faces/{faceId}")]
+pub async fn reassign_face(
+    state: web::Data<PersonsApiState>,
+    user: AuthenticatedUser,
+    path: web::Path<(String, String)>,
+    body: web::Json<ReassignFaceRequest>,
+) -> Result<HttpResponse, ApiError> {
+    let (person_id, face_id) = path.into_inner();
+    state
+        .persons_service
+        .reassign_face(&person_id, &face_id, &user.user_id, body.into_inner())?;
+    Ok(HttpResponse::NoContent().finish())
+}
+
+/// Remove a face from this person (unassigns it; person deleted if now empty).
+#[delete("/photos/persons/{personId}/faces/{faceId}")]
+pub async fn remove_face(
+    state: web::Data<PersonsApiState>,
+    user: AuthenticatedUser,
+    path: web::Path<(String, String)>,
+) -> Result<HttpResponse, ApiError> {
+    let (person_id, face_id) = path.into_inner();
+    state
+        .persons_service
+        .remove_face_from_person(&person_id, &face_id, &user.user_id)?;
+    Ok(HttpResponse::NoContent().finish())
 }
 
 /// Get photos for a specific person cluster.
@@ -75,6 +137,10 @@ pub async fn save_clusters(
 
 pub fn configure_persons(cfg: &mut web::ServiceConfig) {
     cfg.service(list_persons)
+        .service(rename_person)
+        .service(merge_persons)
+        .service(reassign_face)
+        .service(remove_face)
         .service(list_person_photos)
         .service(list_users_with_faces)
         .service(get_face_embeddings)
