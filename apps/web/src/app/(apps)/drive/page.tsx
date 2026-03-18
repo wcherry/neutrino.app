@@ -321,10 +321,7 @@ export default function DrivePage() {
   }
 
   return (
-    <div
-      className={styles.page}
-      onDragOver={(e) => { e.preventDefault(); setUploadOpen(true); }}
-    >
+    <div className={styles.page}>
       {/* Page header */}
       <div className={styles.header}>
         <div className={styles['header-left']}>

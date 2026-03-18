@@ -3,6 +3,7 @@ use crate::photos::{
     service::PhotosService,
 };
 use actix_web::{delete, get, patch, post, put, web, HttpResponse};
+use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use shared::auth::AuthenticatedUser;
 use shared::ApiError;
 use std::sync::Arc;
@@ -232,9 +233,10 @@ pub async fn put_thumbnail(
         .and_then(|v| v.to_str().ok())
         .unwrap_or("image/jpeg")
         .to_string();
+    let b64 = BASE64.encode(&body);
     state
         .photos_service
-        .save_thumbnail(&photo_id, body.to_vec(), mime_type)?;
+        .save_thumbnail(&photo_id, b64, mime_type)?;
     Ok(HttpResponse::NoContent().finish())
 }
 
@@ -258,11 +260,38 @@ pub async fn get_thumbnail(
 ) -> Result<HttpResponse, ApiError> {
     let photo_id = path.into_inner();
     match state.photos_service.get_thumbnail(&photo_id)? {
-        Some((data, mime_type)) => Ok(HttpResponse::Ok()
-            .content_type(mime_type)
-            .body(data)),
+        Some((b64, mime_type)) => {
+            let bytes = BASE64.decode(&b64).map_err(|_| ApiError::internal("Invalid thumbnail data"))?;
+            Ok(HttpResponse::Ok().content_type(mime_type).body(bytes))
+        }
         None => Err(ApiError::not_found("Thumbnail not yet available")),
     }
+}
+
+/// Worker endpoint — stores extracted image metadata for a photo.
+/// Accepts a JSON body. No user auth required (worker-to-service call).
+#[utoipa::path(
+    put,
+    path = "/api/v1/photos/{id}/metadata",
+    params(("id" = String, Path, description = "Photo ID")),
+    responses(
+        (status = 204, description = "Metadata saved"),
+        (status = 400, description = "Invalid JSON"),
+        (status = 404, description = "Photo not found"),
+    ),
+    tag = "photos"
+)]
+#[put("/photos/{id}/metadata")]
+pub async fn put_metadata(
+    state: web::Data<PhotosApiState>,
+    path: web::Path<String>,
+    body: web::Bytes,
+) -> Result<HttpResponse, ApiError> {
+    let photo_id = path.into_inner();
+    let metadata = String::from_utf8(body.to_vec())
+        .map_err(|_| ApiError::bad_request("Invalid UTF-8 in metadata body"))?;
+    state.photos_service.save_metadata(&photo_id, metadata)?;
+    Ok(HttpResponse::NoContent().finish())
 }
 
 pub fn configure_photos(cfg: &mut web::ServiceConfig) {
@@ -275,7 +304,8 @@ pub fn configure_photos(cfg: &mut web::ServiceConfig) {
         .service(trash_photo)
         .service(restore_photo)
         .service(put_thumbnail)
-        .service(get_thumbnail);
+        .service(get_thumbnail)
+        .service(put_metadata);
 }
 
 #[derive(OpenApi)]

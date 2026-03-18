@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useRef, useState } from 'react';
 import { Cloud, Upload } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import styles from './Sidebar.module.css';
@@ -31,7 +31,7 @@ export interface SidebarProps {
   logoHref?: string;
   sections?: NavSection[];
   quota?: StorageQuota;
-  onUpload?: () => void;
+  onUpload?: (files: FileList) => void;
   className?: string;
 }
 
@@ -50,6 +50,8 @@ export function Sidebar({
   onUpload,
   className = '',
 }: SidebarProps) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [dragOver, setDragOver] = useState(false);
   const quotaPercent =
     quota && quota.totalBytes > 0
       ? Math.min(100, (quota.usedBytes / quota.totalBytes) * 100)
@@ -80,12 +82,34 @@ export function Sidebar({
         <div className={styles['upload-area']}>
           <button
             type="button"
-            className={styles['upload-btn']}
-            onClick={onUpload}
+            className={[styles['upload-btn'], dragOver ? styles['drag-over'] : ''].filter(Boolean).join(' ')}
+            onClick={() => fileInputRef.current?.click()}
+            onDragEnter={(e) => { e.preventDefault(); setDragOver(true); }}
+            onDragOver={(e) => e.preventDefault()}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={(e) => {
+              e.preventDefault();
+              setDragOver(false);
+              if (e.dataTransfer.files.length > 0) onUpload(e.dataTransfer.files);
+            }}
           >
             <Upload size={16} aria-hidden="true" />
             Upload files
           </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            style={{ display: 'none' }}
+            onChange={(e) => {
+              if (e.target.files && e.target.files.length > 0) {
+                onUpload(e.target.files);
+                e.target.value = '';
+              }
+            }}
+            tabIndex={-1}
+            aria-hidden="true"
+          />
         </div>
       )}
 

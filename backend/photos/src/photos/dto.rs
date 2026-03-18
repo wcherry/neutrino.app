@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use utoipa::ToSchema;
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -25,13 +26,16 @@ pub struct PhotoResponse {
     pub size_bytes: i64,
     /// URL to download/preview the photo via drive API
     pub content_url: String,
-    /// URL to fetch the small icon thumbnail (null if not yet generated)
-    pub thumbnail_url: Option<String>,
+    /// Base64-encoded thumbnail string (null if not yet generated)
+    pub thumbnail: Option<String>,
+    pub thumbnail_mime_type: Option<String>,
     pub is_starred: bool,
     pub is_archived: bool,
     pub capture_date: Option<String>,
     pub created_at: String,
     pub updated_at: String,
+    /// Extracted image metadata (dimensions, EXIF), null until the worker has processed it.
+    pub metadata: Option<Value>,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -40,3 +44,4 @@ pub struct ListPhotosResponse {
     pub photos: Vec<PhotoResponse>,
     pub total: usize,
 }
+

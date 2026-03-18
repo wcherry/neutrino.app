@@ -76,6 +76,18 @@
   outline-offset: 2px;
 }
 
+@keyframes upload-flash {
+  0%        { background-color: var(--color-accent-subtle); color: var(--color-accent-text); }
+  25%       { background-color: var(--color-accent);        color: #ffffff; }
+  50%       { background-color: var(--color-accent-subtle); color: var(--color-accent-text); }
+  75%, 100% { background-color: var(--color-accent);        color: #ffffff; }
+}
+
+.upload-btn.drag-over {
+  border-style: solid;
+  animation: upload-flash 0.5s ease-out forwards;
+}
+
 /* Navigation */
 .nav {
   flex: 1;

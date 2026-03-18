@@ -1,12 +1,14 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   AppShell,
   Sidebar,
   Topbar,
   Spinner,
+  useToast,
   type NavSection,
   type StorageQuota,
 } from '@neutrino/ui';
@@ -28,7 +30,7 @@ const NAV_SECTIONS: NavSection[] = [
   {
     id: 'main',
     items: [
-      { id: 'my-drive', label: 'My Drive', icon: HardDrive, href: '/drive', active: true },
+      { id: 'my-drive', label: 'My Drive', icon: HardDrive, href: '/drive' },
       { id: 'photos', label: 'Photos', icon: ImageIcon, href: '/photos' },
       { id: 'docs', label: 'Docs', icon: FileTextIcon, href: '/docs' },
       { id: 'sheets', label: 'Sheets', icon: FileSpreadsheet, href: '/sheets' },
@@ -63,7 +65,37 @@ type AuthState =
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const pathname = usePathname();
+
+  const allHrefs = NAV_SECTIONS.flatMap((s) => s.items).filter((i) => i.href);
+  const activeHref = allHrefs
+    .filter((i) => pathname === i.href || pathname.startsWith(i.href! + '/'))
+    .sort((a, b) => b.href!.length - a.href!.length)[0]?.href;
+  const navSections = NAV_SECTIONS.map((section) => ({
+    ...section,
+    items: section.items.map((item) => ({ ...item, active: item.href === activeHref })),
+  }));
+  const toast = useToast();
+  const queryClient = useQueryClient();
   const [auth, setAuth] = useState<AuthState>({ status: 'loading' });
+
+  async function handleUpload(files: FileList) {
+    const fileArr = Array.from(files);
+    toast.info(`Uploading ${fileArr.length} file${fileArr.length > 1 ? 's' : ''}…`);
+    const results = await Promise.allSettled(
+      fileArr.map((file) => storageApi.uploadFile(file, undefined, null))
+    );
+    const succeeded = results.filter((r) => r.status === 'fulfilled').length;
+    const failed = results.filter((r) => r.status === 'rejected').length;
+    if (failed === 0) {
+      toast.success(`${succeeded} file${succeeded > 1 ? 's' : ''} uploaded`);
+    } else if (succeeded === 0) {
+      toast.error(`Failed to upload ${failed} file${failed > 1 ? 's' : ''}`);
+    } else {
+      toast.warning(`${succeeded} uploaded, ${failed} failed`);
+    }
+    queryClient.invalidateQueries({ queryKey: ['contents'] });
+  }
 
   useEffect(() => {
     async function init() {
@@ -115,9 +147,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     <Sidebar
       logoText="Neutrino"
       logoHref="/drive"
-      sections={NAV_SECTIONS}
+      sections={navSections}
       quota={auth.quota}
-      onUpload={() => {}}
+      onUpload={handleUpload}
     />
   );
 

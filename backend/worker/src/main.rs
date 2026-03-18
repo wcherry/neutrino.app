@@ -5,6 +5,7 @@ use tracing::{error, info, warn};
 
 mod config;
 mod drive_client;
+mod metadata;
 mod thumbnail;
 
 use config::Config;
@@ -79,19 +80,27 @@ async fn process_thumbnail(state: &WorkerState, job: &JobResponse) -> Result<(),
         return Err(format!("Not an image (mime_type={})", mime_type));
     }
 
-    // Generate thumbnail on a blocking thread.
-    let thumb = tokio::task::spawn_blocking(move || thumbnail::generate_jpeg_thumbnail(&bytes))
-        .await
-        .map_err(|e| format!("Thumbnail task panicked: {}", e))??;
+    // Generate thumbnail and extract metadata on a blocking thread.
+    let bytes_arc = std::sync::Arc::new(bytes);
+    let bytes_for_thumb = bytes_arc.clone();
+    let (thumb, photo_metadata) = tokio::task::spawn_blocking(move || {
+        let thumb = thumbnail::generate_jpeg_thumbnail(&bytes_for_thumb);
+        let meta = metadata::extract_metadata(&bytes_for_thumb);
+        (thumb, meta)
+    })
+    .await
+    .map_err(|e| format!("Thumbnail task panicked: {}", e))?;
 
-    // Upload to the photos service.
-    let url = format!(
+    let thumb = thumb?;
+
+    // Upload thumbnail to the photos service.
+    let thumb_url = format!(
         "{}/api/v1/photos/{}/thumbnail",
         state.photos_url, payload.photo_id
     );
     let resp = state
         .http
-        .put(&url)
+        .put(&thumb_url)
         .header("Content-Type", "image/jpeg")
         .body(thumb)
         .send()
@@ -102,6 +111,29 @@ async fn process_thumbnail(state: &WorkerState, job: &JobResponse) -> Result<(),
         let status = resp.status();
         let body = resp.text().await.unwrap_or_default();
         return Err(format!("Thumbnail upload returned {}: {}", status, body));
+    }
+
+    // Upload metadata to the photos service (non-fatal on failure).
+    match serde_json::to_string(&photo_metadata) {
+        Ok(meta_json) => {
+            let meta_url = format!(
+                "{}/api/v1/photos/{}/metadata",
+                state.photos_url, payload.photo_id
+            );
+            if let Err(e) = state
+                .http
+                .put(&meta_url)
+                .header("Content-Type", "application/json")
+                .body(meta_json)
+                .send()
+                .await
+            {
+                tracing::warn!("Metadata upload failed for photo {}: {}", payload.photo_id, e);
+            }
+        }
+        Err(e) => {
+            tracing::warn!("Failed to serialize metadata for photo {}: {}", payload.photo_id, e);
+        }
     }
 
     Ok(())

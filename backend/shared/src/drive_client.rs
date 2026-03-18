@@ -67,7 +67,7 @@ impl DriveClient {
         token: &str,
         mime_type: &str,
     ) -> Result<Vec<DriveListItem>, ApiError> {
-        let url = format!("{}api/v1/drive/files", self.base_url);
+        let url = format!("{}/api/v1/drive/files", self.base_url);
         let resp = self
             .http
             .get(url)
@@ -104,7 +104,7 @@ impl DriveClient {
             mime_type: mime_type.to_string(),
             folder_id: folder_id.map(|s| s.to_string()),
         };
-        let url = format!("{}api/v1/drive/files", self.base_url);
+        let url = format!("{}/api/v1/drive/files", self.base_url);
 
         let resp = self
             .http
@@ -136,7 +136,7 @@ impl DriveClient {
     ) -> Result<DriveFileRecord, ApiError> {
         let resp = self
             .http
-            .get(format!("{}api/v1/drive/files/{}/info", self.base_url, file_id))
+            .get(format!("{}/api/v1/drive/files/{}/info", self.base_url, file_id))
             .bearer_auth(token)
             .send()
             .await
@@ -167,7 +167,7 @@ impl DriveClient {
     ) -> Result<String, ApiError> {
         let resp = self
             .http
-            .get(format!("{}api/v1/drive/files/{}", self.base_url, file_id))
+            .get(format!("{}/api/v1/drive/files/{}", self.base_url, file_id))
             .bearer_auth(token)
             .send()
             .await
@@ -207,7 +207,7 @@ impl DriveClient {
         let resp = self
             .http
             .post(format!(
-                "{}api/v1/drive/files/{}/versions",
+                "{}/api/v1/drive/files/{}/versions",
                 self.base_url, file_id
             ))
             .bearer_auth(token)
@@ -240,7 +240,7 @@ impl DriveClient {
         };
         let resp = self
             .http
-            .patch(format!("{}api/v1/drive/files/{}", self.base_url, file_id))
+            .patch(format!("{}/api/v1/drive/files/{}", self.base_url, file_id))
             .bearer_auth(token)
             .json(&body)
             .send()

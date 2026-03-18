@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use tracing::{debug};
 
 /// A job dispatched from the drive service.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -108,10 +109,10 @@ impl DriveJobsClient {
 
     /// Fetch the raw bytes of a file (so the worker can generate a thumbnail).
     pub async fn get_file_content(&self, file_id: &str) -> Result<(Vec<u8>, String), String> {
-        let url = format!(
-            "{}/api/v1/jobs/file-content/{}",
+        let url = format!("{}/api/v1/jobs/file-content/{}",
             self.base_url, file_id
         );
+        debug!("Getting file: {}", &url);
         let resp = self
             .http
             .get(&url)

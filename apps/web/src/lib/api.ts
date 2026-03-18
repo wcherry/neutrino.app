@@ -283,18 +283,93 @@ async function refreshTokensOnce(): Promise<AuthTokens | null> {
 type RequestConfig = {
   retry?: boolean;
   auth?: 'auto' | 'none';
+  responseType?: 'json' | 'blob' | 'text' | 'none';
+  onUploadProgress?: (percent: number) => void;
 };
+
+function requestWithXhr<T>(path: string, options: RequestInit, config: RequestConfig): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const url = `${BASE_URL}${path}`;
+    const includeAuth = config.auth !== 'none';
+    const xhr = new XMLHttpRequest();
+
+    if (config.responseType === 'blob') xhr.responseType = 'blob';
+
+    xhr.upload.addEventListener('progress', (e) => {
+      if (e.lengthComputable && config.onUploadProgress) {
+        config.onUploadProgress(Math.round((e.loaded / e.total) * 100));
+      }
+    });
+
+    xhr.addEventListener('load', () => {
+      if (xhr.status === 401 && includeAuth && !config.retry && !shouldSkipRefresh(path)) {
+        refreshTokensOnce().then((refreshed) => {
+          if (refreshed) {
+            requestWithXhr<T>(path, options, { ...config, retry: true }).then(resolve, reject);
+          } else {
+            clearAuthAndRedirect();
+            reject(new ApiClientError(401, 'UNAUTHENTICATED', 'Session expired'));
+          }
+        }).catch(reject);
+        return;
+      }
+
+      if (xhr.status >= 200 && xhr.status < 300) {
+        if (xhr.status === 204 || config.responseType === 'none') {
+          resolve(undefined as unknown as T);
+        } else if (config.responseType === 'blob') {
+          resolve(xhr.response as T);
+        } else if (config.responseType === 'text') {
+          resolve(xhr.responseText as unknown as T);
+        } else {
+          try {
+            resolve(JSON.parse(xhr.responseText) as T);
+          } catch {
+            reject(new Error('Invalid response from server'));
+          }
+        }
+      } else {
+        try {
+          const err = JSON.parse(xhr.responseText) as ApiError;
+          reject(new ApiClientError(xhr.status, err.error.code, err.error.message));
+        } catch {
+          reject(new ApiClientError(xhr.status, 'UNKNOWN_ERROR', `HTTP ${xhr.status}`));
+        }
+      }
+    });
+
+    xhr.addEventListener('error', () => reject(new Error('Network error')));
+    xhr.addEventListener('abort', () => reject(new Error('Request aborted')));
+
+    xhr.open(options.method ?? 'GET', url);
+
+    if (includeAuth) {
+      const authHeaders = getAuthHeader();
+      Object.entries(authHeaders).forEach(([k, v]) => xhr.setRequestHeader(k, v));
+    }
+    if (!(options.body instanceof FormData)) {
+      xhr.setRequestHeader('Content-Type', 'application/json');
+    }
+
+    xhr.send(options.body as XMLHttpRequestBodyInit | null);
+  });
+}
 
 async function request<T>(
   path: string,
   options: RequestInit = {},
   config: RequestConfig = {}
 ): Promise<T> {
+  if (config.onUploadProgress) {
+    return requestWithXhr<T>(path, options, config);
+  }
+
   const url = `${BASE_URL}${path}`;
   const includeAuth = config.auth !== 'none';
+  const isFormData = options.body instanceof FormData;
 
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
+    ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
     ...(options.headers as Record<string, string> | undefined),
     ...(includeAuth ? getAuthHeader() : {}),
   };
@@ -304,7 +379,7 @@ async function request<T>(
   if (res.status === 401 && includeAuth && !config.retry && !shouldSkipRefresh(path)) {
     const refreshed = await refreshTokensOnce();
     if (refreshed) {
-      return request<T>(path, options, { retry: true });
+      return request<T>(path, options, { ...config, retry: true });
     }
     clearAuthAndRedirect();
     throw new ApiClientError(401, 'UNAUTHENTICATED', 'Session expired');
@@ -324,8 +399,16 @@ async function request<T>(
     );
   }
 
-  if (res.status === 204) {
+  if (res.status === 204 || config.responseType === 'none') {
     return undefined as unknown as T;
+  }
+
+  if (config.responseType === 'blob') {
+    return res.blob() as unknown as Promise<T>;
+  }
+
+  if (config.responseType === 'text') {
+    return res.text() as unknown as Promise<T>;
   }
 
   return res.json() as Promise<T>;
@@ -425,51 +508,13 @@ export const storageApi = {
     onProgress?: (percent: number) => void,
     folderId?: string | null,
   ): Promise<FileItem> {
-    return new Promise((resolve, reject) => {
-      const formData = new FormData();
-      if (folderId) formData.append('folder_id', folderId);
-      formData.append('file', file);
-
-      const xhr = new XMLHttpRequest();
-
-      xhr.upload.addEventListener('progress', (e) => {
-        if (e.lengthComputable && onProgress) {
-          onProgress(Math.round((e.loaded / e.total) * 100));
-        }
-      });
-
-      xhr.addEventListener('load', () => {
-        if (xhr.status >= 200 && xhr.status < 300) {
-          try {
-            resolve(JSON.parse(xhr.responseText) as FileItem);
-          } catch {
-            reject(new Error('Invalid response from server'));
-          }
-        } else {
-          try {
-            const err = JSON.parse(xhr.responseText) as ApiError;
-            reject(
-              new ApiClientError(xhr.status, err.error.code, err.error.message)
-            );
-          } catch {
-            reject(new ApiClientError(xhr.status, 'UPLOAD_ERROR', `Upload failed with status ${xhr.status}`));
-          }
-        }
-      });
-
-      xhr.addEventListener('error', () => {
-        reject(new Error('Network error during upload'));
-      });
-
-      xhr.addEventListener('abort', () => {
-        reject(new Error('Upload aborted'));
-      });
-
-      const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
-      xhr.open('POST', `${BASE_URL}/api/v1/drive/files/upload`);
-      if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
-      xhr.send(formData);
-    });
+    const formData = new FormData();
+    if (folderId) formData.append('folder_id', folderId);
+    formData.append('file', file);
+    return request<FileItem>('/api/v1/drive/files/upload', {
+      method: 'POST',
+      body: formData,
+    }, { onUploadProgress: onProgress });
   },
 
   async listFiles(
@@ -497,11 +542,7 @@ export const storageApi = {
   },
 
   async downloadFile(fileId: string): Promise<Blob> {
-    const res = await fetch(`${BASE_URL}/api/v1/drive/files/${fileId}`, {
-      headers: getAuthHeader(),
-    });
-    if (!res.ok) throw new ApiClientError(res.status, 'DOWNLOAD_ERROR', `Download failed`);
-    return res.blob();
+    return request<Blob>(`/api/v1/drive/files/${fileId}`, {}, { responseType: 'blob' });
   },
 
   async getQuota(): Promise<QuotaInfo> {
@@ -514,21 +555,13 @@ export const storageApi = {
 
   /** Fetch file content as a Blob URL for in-browser preview. Caller must call URL.revokeObjectURL when done. */
   async fetchPreviewBlobUrl(fileId: string): Promise<string> {
-    const res = await fetch(`${BASE_URL}/api/v1/drive/files/${fileId}/preview`, {
-      headers: getAuthHeader(),
-    });
-    if (!res.ok) throw new ApiClientError(res.status, 'PREVIEW_ERROR', `Preview failed`);
-    const blob = await res.blob();
+    const blob = await request<Blob>(`/api/v1/drive/files/${fileId}/preview`, {}, { responseType: 'blob' });
     return URL.createObjectURL(blob);
   },
 
   /** Fetch text content of a file for preview (text/code files). */
   async fetchPreviewText(fileId: string): Promise<string> {
-    const res = await fetch(`${BASE_URL}/api/v1/drive/files/${fileId}/preview`, {
-      headers: getAuthHeader(),
-    });
-    if (!res.ok) throw new ApiClientError(res.status, 'PREVIEW_ERROR', `Preview failed`);
-    return res.text();
+    return request<string>(`/api/v1/drive/files/${fileId}/preview`, {}, { responseType: 'text' });
   },
 
   async getZipContents(fileId: string): Promise<ZipContentsResponse> {
@@ -938,19 +971,7 @@ export const sharedWithMeApi = {
  * @param path - The `contentUrl` returned by the app service (e.g. /api/v1/drive/files/{id})
  */
 export async function driveReadContent(path: string): Promise<string> {
-  const res = await fetch(`${BASE_URL}${path}`, { headers: getAuthHeader() });
-  if (res.status === 401) {
-    const refreshed = await refreshTokensOnce();
-    if (refreshed) {
-      const retry = await fetch(`${BASE_URL}${path}`, { headers: getAuthHeader() });
-      if (!retry.ok) throw new ApiClientError(retry.status, 'CONTENT_READ_ERROR', 'Failed to read content');
-      return retry.text();
-    }
-    clearAuthAndRedirect();
-    throw new ApiClientError(401, 'UNAUTHENTICATED', 'Session expired');
-  }
-  if (!res.ok) throw new ApiClientError(res.status, 'CONTENT_READ_ERROR', 'Failed to read content');
-  return res.text();
+  return request<string>(path, {}, { responseType: 'text' });
 }
 
 /**
@@ -962,22 +983,7 @@ export async function driveReadContent(path: string): Promise<string> {
 export async function driveWriteContent(path: string, content: string, filename: string): Promise<void> {
   const formData = new FormData();
   formData.append('file', new Blob([content], { type: 'application/json' }), filename);
-  const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
-  const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
-  const res = await fetch(`${BASE_URL}${path}`, { method: 'POST', headers, body: formData });
-  if (res.status === 401) {
-    const refreshed = await refreshTokensOnce();
-    if (refreshed) {
-      const newToken = localStorage.getItem('access_token');
-      const retryHeaders: Record<string, string> = newToken ? { Authorization: `Bearer ${newToken}` } : {};
-      const retry = await fetch(`${BASE_URL}${path}`, { method: 'POST', headers: retryHeaders, body: formData });
-      if (!retry.ok) throw new ApiClientError(retry.status, 'CONTENT_WRITE_ERROR', 'Failed to write content');
-      return;
-    }
-    clearAuthAndRedirect();
-    throw new ApiClientError(401, 'UNAUTHENTICATED', 'Session expired');
-  }
-  if (!res.ok) throw new ApiClientError(res.status, 'CONTENT_WRITE_ERROR', 'Failed to write content');
+  return request<void>(path, { method: 'POST', body: formData });
 }
 
 // ---------------------------------------------------------------------------
@@ -1188,6 +1194,25 @@ export const slidesApi = {
 // Photos API (Phase 3.5)
 // ---------------------------------------------------------------------------
 
+export interface PhotoExifData {
+  make?: string;
+  model?: string;
+  exposureTime?: string;
+  fNumber?: number;
+  iso?: number;
+  focalLength?: number;
+  gpsLatitude?: number;
+  gpsLongitude?: number;
+  datetimeOriginal?: string;
+}
+
+export interface PhotoMetadata {
+  width?: number;
+  height?: number;
+  format?: string;
+  exif?: PhotoExifData;
+}
+
 export interface PhotoResponse {
   id: string;
   fileId: string;
@@ -1196,13 +1221,16 @@ export interface PhotoResponse {
   sizeBytes: number;
   /** URL to read/stream the media via Drive API */
   contentUrl: string;
-  /** URL to fetch the icon-sized thumbnail, null if not yet generated */
-  thumbnailUrl: string | null;
+  /** Base64-encoded thumbnail bytes, null if not yet generated */
+  thumbnail: string | null;
+  thumbnailMimeType: string | null;
   isStarred: boolean;
   isArchived: boolean;
   captureDate: string | null;
   createdAt: string;
   updatedAt: string;
+  /** Extracted image metadata; null until the worker has processed the photo */
+  metadata: PhotoMetadata | null;
 }
 
 export interface ListPhotosResponse {
@@ -1294,53 +1322,16 @@ export const photosApi = {
     file: File,
     onProgress?: (percent: number) => void,
   ): Promise<PhotoResponse> {
-    const fileItem = await new Promise<FileItem>((resolve, reject) => {
-      const formData = new FormData();
-      formData.append('file', file);
-
-      const xhr = new XMLHttpRequest();
-
-      xhr.upload.addEventListener('progress', (e) => {
-        if (e.lengthComputable && onProgress) {
-          onProgress(Math.round((e.loaded / e.total) * 100));
-        }
-      });
-
-      xhr.addEventListener('load', () => {
-        if (xhr.status >= 200 && xhr.status < 300) {
-          try {
-            resolve(JSON.parse(xhr.responseText) as FileItem);
-          } catch {
-            reject(new Error('Invalid response from server'));
-          }
-        } else {
-          try {
-            const err = JSON.parse(xhr.responseText) as ApiError;
-            reject(new ApiClientError(xhr.status, err.error.code, err.error.message));
-          } catch {
-            reject(new ApiClientError(xhr.status, 'UPLOAD_ERROR', `Upload failed: ${xhr.status}`));
-          }
-        }
-      });
-
-      xhr.addEventListener('error', () => reject(new Error('Network error during upload')));
-      xhr.addEventListener('abort', () => reject(new Error('Upload aborted')));
-
-      const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
-      xhr.open('POST', `${BASE_URL}/api/v1/drive/files/upload`);
-      if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
-      xhr.send(formData);
-    });
-
+    const formData = new FormData();
+    formData.append('file', file);
+    const fileItem = await request<FileItem>('/api/v1/drive/files/upload', {
+      method: 'POST',
+      body: formData,
+    }, { onUploadProgress: onProgress });
     return request<PhotoResponse>('/api/v1/photos', {
       method: 'POST',
       body: JSON.stringify({ fileId: fileItem.id } satisfies RegisterPhotoRequest),
     });
-  },
-
-  getPhotoStreamUrl(fileId: string): string {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : '';
-    return `${BASE_URL}/api/v1/drive/files/${fileId}?token=${token ?? ''}`;
   },
 };
 

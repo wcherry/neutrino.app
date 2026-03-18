@@ -137,7 +137,7 @@ impl PhotosRepository {
     pub fn set_thumbnail(
         &self,
         photo_id: &str,
-        thumbnail: Vec<u8>,
+        thumbnail: String,
         mime_type: String,
     ) -> Result<(), ApiError> {
         let mut conn = self.get_conn()?;
@@ -155,7 +155,22 @@ impl PhotosRepository {
         Ok(())
     }
 
-    pub fn get_thumbnail(&self, photo_id: &str) -> Result<Option<(Vec<u8>, String)>, ApiError> {
+    pub fn set_metadata(&self, photo_id: &str, metadata: String) -> Result<(), ApiError> {
+        let mut conn = self.get_conn()?;
+        diesel::update(photos::table.filter(photos::id.eq(photo_id)))
+            .set((
+                photos::metadata.eq(Some(metadata)),
+                photos::updated_at.eq(chrono::Utc::now().naive_utc()),
+            ))
+            .execute(&mut conn)
+            .map_err(|e| {
+                tracing::error!("DB set metadata error: {:?}", e);
+                ApiError::internal("Database error")
+            })?;
+        Ok(())
+    }
+
+    pub fn get_thumbnail(&self, photo_id: &str) -> Result<Option<(String, String)>, ApiError> {
         let photo = self.get_photo(photo_id)?;
         match (photo.thumbnail, photo.thumbnail_mime_type) {
             (Some(data), Some(mime)) => Ok(Some((data, mime))),

@@ -64,6 +64,7 @@ impl PhotosService {
             capture_date,
             thumbnail: None,
             thumbnail_mime_type: None,
+            metadata: None,
         };
         let photo = self.repo.insert_photo(new_photo)?;
 
@@ -295,14 +296,21 @@ impl PhotosService {
     pub fn save_thumbnail(
         &self,
         photo_id: &str,
-        data: Vec<u8>,
+        data: String,
         mime_type: String,
     ) -> Result<(), ApiError> {
         self.repo.get_photo_including_deleted(photo_id)?;
         self.repo.set_thumbnail(photo_id, data, mime_type)
     }
 
-    pub fn get_thumbnail(&self, photo_id: &str) -> Result<Option<(Vec<u8>, String)>, ApiError> {
+    pub fn save_metadata(&self, photo_id: &str, metadata: String) -> Result<(), ApiError> {
+        let _: serde_json::Value = serde_json::from_str(&metadata)
+            .map_err(|_| ApiError::bad_request("Invalid JSON metadata"))?;
+        self.repo.get_photo_including_deleted(photo_id)?;
+        self.repo.set_metadata(photo_id, metadata)
+    }
+
+    pub fn get_thumbnail(&self, photo_id: &str) -> Result<Option<(String, String)>, ApiError> {
         self.repo.get_thumbnail(photo_id)
     }
 
@@ -313,24 +321,25 @@ impl PhotosService {
         mime_type: &str,
         size: i64,
     ) -> PhotoResponse {
-        let thumbnail_url = if photo.thumbnail.is_some() {
-            Some(format!("/api/v1/photos/{}/thumbnail", photo.id))
-        } else {
-            None
-        };
+        let metadata = photo
+            .metadata
+            .as_deref()
+            .and_then(|s| serde_json::from_str(s).ok());
         PhotoResponse {
             id: photo.id.clone(),
             file_id: photo.file_id.clone(),
             file_name: name.to_string(),
             mime_type: mime_type.to_string(),
             size_bytes: size,
-            content_url: format!("/api/v1/drive/files/{}", photo.file_id),
-            thumbnail_url,
+            content_url: format!("api/v1/drive/files/{}", photo.file_id),
+            thumbnail: photo.thumbnail,
+            thumbnail_mime_type: photo.thumbnail_mime_type,
             is_starred: photo.is_starred,
             is_archived: photo.is_archived,
             capture_date: photo.capture_date.map(|d| d.and_utc().to_rfc3339()),
             created_at: photo.created_at.and_utc().to_rfc3339(),
             updated_at: photo.updated_at.and_utc().to_rfc3339(),
+            metadata,
         }
     }
 }

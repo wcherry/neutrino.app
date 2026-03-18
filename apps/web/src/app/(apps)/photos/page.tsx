@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button, Heading, Spinner } from '@neutrino/ui';
+import { Button, Heading, Spinner, Modal, ModalHeader, ModalBody } from '@neutrino/ui';
 import {
   Image as ImageIcon,
   Upload,
@@ -12,13 +12,17 @@ import {
   FolderOpen,
   Plus,
   X,
+  Info,
 } from 'lucide-react';
 import {
   photosApi,
   albumsApi,
   type PhotoResponse,
   type AlbumResponse,
+  type FileItem,
 } from '@/lib/api';
+import { PhotoInfoPanel } from './PhotoInfoPanel';
+import { PreviewModal } from '../drive/PreviewModal';
 import styles from './page.module.css';
 
 type FilterTab = 'all' | 'favorites' | 'archive' | 'albums';
@@ -35,8 +39,35 @@ function isImageMime(mime: string): boolean {
   return mime.startsWith('image/');
 }
 
-function isVideoMime(mime: string): boolean {
-  return mime.startsWith('video/');
+
+function useAuthBlobUrl(path: string | null): string | null {
+  const [blobUrl, setBlobUrl] = useState<string | null>(null);
+  const blobRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!path) return;
+    let cancelled = false;
+    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+    fetch(path, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+      .then(r => r.ok ? r.blob() : Promise.reject())
+      .then(blob => {
+        if (!cancelled) {
+          const url = URL.createObjectURL(blob);
+          blobRef.current = url;
+          setBlobUrl(url);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+      if (blobRef.current) {
+        URL.revokeObjectURL(blobRef.current);
+        blobRef.current = null;
+      }
+    };
+  }, [path]);
+
+  return blobUrl;
 }
 
 function PhotoCard({
@@ -44,20 +75,26 @@ function PhotoCard({
   onStar,
   onArchive,
   onTrash,
+  onInfo,
+  onPreview,
 }: {
   photo: PhotoResponse;
   onStar: (photo: PhotoResponse) => void;
   onArchive: (photo: PhotoResponse) => void;
   onTrash: (photo: PhotoResponse) => void;
+  onInfo: (photo: PhotoResponse) => void;
+  onPreview: (photo: PhotoResponse) => void;
 }) {
-  const streamUrl = photosApi.getPhotoStreamUrl(photo.fileId);
+  const thumbDataUrl = photo.thumbnail && photo.thumbnailMimeType
+    ? `data:${photo.thumbnailMimeType};base64,${photo.thumbnail}`
+    : null;
+  const blobUrl = useAuthBlobUrl(thumbDataUrl ? null : (isImageMime(photo.mimeType) ? photo.contentUrl : null));
+  const imgSrc = thumbDataUrl ?? blobUrl;
 
   return (
-    <div className={styles.photoCard}>
-      {isImageMime(photo.mimeType) ? (
-        <img src={streamUrl} alt={photo.fileName} className={styles.photoImg} loading="lazy" />
-      ) : isVideoMime(photo.mimeType) ? (
-        <video src={streamUrl} className={styles.photoImg} muted playsInline />
+    <div className={styles.photoCard} onClick={() => onPreview(photo)} style={{ cursor: 'pointer' }}>
+      {imgSrc ? (
+        <img src={imgSrc} alt={photo.fileName} className={styles.photoImg} loading="lazy" />
       ) : (
         <div className={styles.photoPlaceholder}>
           <ImageIcon size={32} />
@@ -87,6 +124,13 @@ function PhotoCard({
             title="Move to trash"
           >
             <Trash2 size={14} />
+          </button>
+          <button
+            className={styles.iconBtn}
+            onClick={(e) => { e.stopPropagation(); onInfo(photo); }}
+            title="Photo info"
+          >
+            <Info size={14} />
           </button>
         </div>
         <div className={styles.photoOverlayBottom}>
@@ -119,7 +163,24 @@ export default function PhotosPage() {
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [newAlbumTitle, setNewAlbumTitle] = useState('');
   const [showNewAlbum, setShowNewAlbum] = useState(false);
+  const [selectedPhoto, setSelectedPhoto] = useState<PhotoResponse | null>(null);
+  const [previewFile, setPreviewFile] = useState<FileItem | null>(null);
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [isDraggingOver, setIsDraggingOver] = useState(false);
   const uploadInputRef = useRef<HTMLInputElement>(null);
+
+  function openPreview(photo: PhotoResponse) {
+    setPreviewFile({
+      id: photo.fileId,
+      name: photo.fileName,
+      sizeBytes: photo.sizeBytes,
+      mimeType: photo.mimeType,
+      folderId: null,
+      isStarred: photo.isStarred,
+      createdAt: photo.createdAt,
+      updatedAt: photo.updatedAt,
+    });
+  }
 
   const photosQuery = useQuery({
     queryKey: ['photos', activeTab],
@@ -182,6 +243,15 @@ export default function PhotosPage() {
     const files = Array.from(e.target.files ?? []);
     files.forEach((file) => uploadMutation.mutate(file));
     e.target.value = '';
+    setShowUploadModal(false);
+  }, [uploadMutation]);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDraggingOver(false);
+    const files = Array.from(e.dataTransfer.files);
+    files.forEach((file) => uploadMutation.mutate(file));
+    setShowUploadModal(false);
   }, [uploadMutation]);
 
   const photos = photosQuery.data?.photos ?? [];
@@ -209,7 +279,7 @@ export default function PhotosPage() {
           )}
           <Button
             variant="secondary"
-            onClick={() => uploadInputRef.current?.click()}
+            onClick={() => setShowUploadModal(true)}
             disabled={uploadMutation.isPending}
             icon={<Upload size={16} />}
           >
@@ -321,10 +391,43 @@ export default function PhotosPage() {
               onStar={(p) => starMutation.mutate(p)}
               onArchive={(p) => archiveMutation.mutate(p)}
               onTrash={(p) => trashMutation.mutate(p)}
+              onInfo={(p) => setSelectedPhoto((prev) => prev?.id === p.id ? null : p)}
+              onPreview={(p) => openPreview(p)}
             />
           ))}
         </div>
       )}
+
+      {selectedPhoto && (
+        <PhotoInfoPanel
+          photo={selectedPhoto}
+          onClose={() => setSelectedPhoto(null)}
+        />
+      )}
+
+      {previewFile && (
+        <PreviewModal file={previewFile} onClose={() => setPreviewFile(null)} />
+      )}
+
+      <Modal open={showUploadModal} onClose={() => setShowUploadModal(false)} size="md">
+        <ModalHeader title="Upload files" onClose={() => setShowUploadModal(false)} />
+        <ModalBody>
+          <div
+            className={`${styles.modalDropZone} ${isDraggingOver ? styles.modalDropZoneActive : ''}`}
+            onClick={() => uploadInputRef.current?.click()}
+            onDragOver={(e) => { e.preventDefault(); setIsDraggingOver(true); }}
+            onDragLeave={() => setIsDraggingOver(false)}
+            onDrop={handleDrop}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => e.key === 'Enter' && uploadInputRef.current?.click()}
+          >
+            <Upload size={36} className={styles.modalDropIcon} />
+            <p className={styles.modalDropText}>Drag &amp; drop files here</p>
+            <p className={styles.modalDropHint}>or click to browse &middot; up to 10 GB per file</p>
+          </div>
+        </ModalBody>
+      </Modal>
     </div>
   );
 }
