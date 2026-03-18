@@ -10,33 +10,32 @@ Detect faces in uploaded images and make them visible and explorable in the UI.
 
 Features
 
-Face Detection Pipeline
-	•	Create face-service microservice
-	•	Integrate face detection model (e.g., InsightFace or MTCNN)
-	•	Hook into image upload pipeline
-	•	Process images asynchronously via worker queue
-	•	Detect face bounding boxes
-	•	Generate cropped face thumbnails
-	•	Store face metadata in database
+1.1 Face Detection Pipeline
+	[x]	Integrate face detection model InsightFace (Rust crate:https://crates.io/crates/insightface/0.0.3) into Worker
+	[x]	Hook into image upload pipeline
+	[x]	Process images asynchronously via worker queue
+	[x]	Detect face bounding boxes
+	[x]	Generate cropped face thumbnails
+	[x]	Store face metadata in database
 
-Data Model
-	•	Create faces table (id, photo_id, bounding_box, thumbnail_url)
-	•	Add nullable person_id field
-	•	Add nullable embedding field (for future phases)
+1.2 Data Model
+	[x]	Create faces table (id, photo_id, bounding_box, thumbnail_url)
+	[x]	Add nullable person_id field
+	[x]	Add nullable embedding field (for future phases)
 
-UI — Face Visibility
-	•	Display subtle face indicators on photo viewer
-	•	Add “Faces in this photo” panel
-	•	Show cropped thumbnails for detected faces
-	•	Add hover/focus interaction for faces
+1.3 UI — Face Visibility
+	[x]	Display subtle face indicators on photo viewer
+	[x]	Add “Faces in this photo” panel
+	[x]	Show cropped thumbnails for detected faces
+	[x]	Add hover/focus interaction for faces
 
 Validation Steps
 	1.	Upload image with multiple faces
 	2.	Confirm background job runs successfully
 	3.	Verify faces are detected and stored
 	4.	Open photo in UI:
-	•	Confirm face indicators appear
-	•	Confirm thumbnails render correctly
+	[ ]	Confirm face indicators appear
+	[ ]	Confirm thumbnails render correctly
 	5.	Test multiple images for consistency
 	6.	Verify no UI clutter (aligns with design guide)
 
@@ -51,38 +50,38 @@ Automatically group similar faces into clusters representing unknown individuals
 Features
 
 Embedding Generation
-	•	Integrate face embedding model (e.g., ArcFace / InsightFace)
-	•	Generate embedding vectors for each detected face
-	•	Store embeddings in database (pgvector or equivalent)
+	[ ]	Integrate face embedding model (e.g., ArcFace / InsightFace)
+	[ ]	Generate embedding vectors for each detected face
+	[ ]	Store embeddings in database (pgvector or equivalent)
 
 Clustering Engine
-	•	Implement clustering algorithm (DBSCAN / cosine similarity)
-	•	Group faces into clusters
-	•	Create temporary “Person” records for clusters
-	•	Assign faces → cluster/person_id
+	[ ]	Implement clustering algorithm (DBSCAN / cosine similarity)
+	[ ]	Group faces into clusters
+	[ ]	Create temporary “Person” records for clusters
+	[ ]	Assign faces → cluster/person_id
 
 UI — People (Beta)
-	•	Create “People” page
-	•	Display clusters as face cards
-	•	Show representative thumbnail per cluster
-	•	Display number of associated photos
+	[ ]	Create “People” page
+	[ ]	Display clusters as face cards
+	[ ]	Show representative thumbnail per cluster
+	[ ]	Display number of associated photos
 
 Cluster Exploration
-	•	Click cluster → view all related photos
-	•	Show all face thumbnails in cluster
+	[ ]	Click cluster → view all related photos
+	[ ]	Show all face thumbnails in cluster
 
 Validation Steps
 	1.	Upload multiple images of same person
 	2.	Confirm embeddings are generated
 	3.	Run clustering job:
-	•	Verify similar faces grouped together
+	[ ]	Verify similar faces grouped together
 	4.	Navigate to “People” page:
-	•	Confirm clusters appear
-	•	Confirm counts are accurate
+	[ ]	Confirm clusters appear
+	[ ]	Confirm counts are accurate
 	5.	Open cluster:
-	•	Verify all photos contain same person
+	[ ]	Verify all photos contain same person
 	6.	Test edge case:
-	•	Similar-looking different people should not cluster incorrectly (baseline check)
+	[ ]	Similar-looking different people should not cluster incorrectly (baseline check)
 
 ⸻
 
@@ -95,38 +94,38 @@ Allow users to assign names and manage identity for clustered faces.
 Features
 
 Person Management
-	•	Add editable Person entity (name, avatar)
-	•	Assign name to a cluster
-	•	Persist identity across sessions
+	[ ]	Add editable Person entity (name, avatar)
+	[ ]	Assign name to a cluster
+	[ ]	Persist identity across sessions
 
 Cluster Controls
-	•	Merge clusters (combine two people)
-	•	Split cluster (remove incorrect faces)
-	•	Reassign individual faces to different person
+	[ ]	Merge clusters (combine two people)
+	[ ]	Split cluster (remove incorrect faces)
+	[ ]	Reassign individual faces to different person
 
 UI — People Management
-	•	Add editable name field to person view
-	•	Create person detail page
-	•	Display all photos for selected person
-	•	Allow inline rename interaction
+	[ ]	Add editable name field to person view
+	[ ]	Create person detail page
+	[ ]	Display all photos for selected person
+	[ ]	Allow inline rename interaction
 
 UI — Actions
-	•	Add “Name this person” action
-	•	Add merge UI (multi-select clusters)
-	•	Add remove/reassign controls
+	[ ]	Add “Name this person” action
+	[ ]	Add merge UI (multi-select clusters)
+	[ ]	Add remove/reassign controls
 
 Validation Steps
 	1.	Open unnamed cluster
 	2.	Assign a name:
-	•	Confirm persistence after refresh
+	[ ]	Confirm persistence after refresh
 	3.	Merge two clusters:
-	•	Verify all faces combine correctly
+	[ ]	Verify all faces combine correctly
 	4.	Split cluster:
-	•	Confirm removed faces no longer belong
+	[ ]	Confirm removed faces no longer belong
 	5.	Navigate to person page:
-	•	Verify all associated photos display
+	[ ]	Verify all associated photos display
 	6.	Test renaming:
-	•	Confirm updates propagate everywhere
+	[ ]	Confirm updates propagate everywhere
 
 ⸻
 
@@ -139,28 +138,28 @@ Enable users to find photos by people quickly and intuitively.
 Features
 
 Search Integration
-	•	Extend search index to include person_id
-	•	Support queries like “Photos of [Person]”
+	[ ]	Extend search index to include person_id
+	[ ]	Support queries like “Photos of [Person]”
 
 Filtering System
-	•	Add filter by person
-	•	Add multi-person filtering (AND logic)
-	•	Add filter UI component (dropdown or chips)
+	[ ]	Add filter by person
+	[ ]	Add multi-person filtering (AND logic)
+	[ ]	Add filter UI component (dropdown or chips)
 
 UI — Search Experience
-	•	Add person suggestions in search bar
-	•	Display person tokens/chips in active filters
-	•	Integrate filters into photo grid view
+	[ ]	Add person suggestions in search bar
+	[ ]	Display person tokens/chips in active filters
+	[ ]	Integrate filters into photo grid view
 
 Validation Steps
 	1.	Search by person name:
-	•	Confirm correct photos returned
+	[ ]	Confirm correct photos returned
 	2.	Apply single-person filter:
-	•	Verify results accuracy
+	[ ]	Verify results accuracy
 	3.	Apply multi-person filter:
-	•	Confirm only shared photos appear
+	[ ]	Confirm only shared photos appear
 	4.	Test empty state:
-	•	No results handled cleanly
+	[ ]	No results handled cleanly
 	5.	Verify performance on large datasets
 
 ⸻
@@ -174,33 +173,33 @@ Automatically identify known people in new photos with confidence scoring.
 Features
 
 Recognition Engine
-	•	Compare new face embeddings with known persons
-	•	Implement similarity threshold logic
-	•	Assign person_id when confidence is high
+	[ ]	Compare new face embeddings with known persons
+	[ ]	Implement similarity threshold logic
+	[ ]	Assign person_id when confidence is high
 
 Suggestion System
-	•	Store “suggested matches” for medium confidence
-	•	Allow user confirmation/rejection
+	[ ]	Store “suggested matches” for medium confidence
+	[ ]	Allow user confirmation/rejection
 
 UI — Suggestions
-	•	Create “Suggestions” panel
-	•	Show face + suggested name
-	•	Add Accept / Reject actions
+	[ ]	Create “Suggestions” panel
+	[ ]	Show face + suggested name
+	[ ]	Add Accept / Reject actions
 
 Feedback Loop
-	•	Accept → assign person_id
-	•	Reject → prevent future similar matches
-	•	Store feedback signals
+	[ ]	Accept → assign person_id
+	[ ]	Reject → prevent future similar matches
+	[ ]	Store feedback signals
 
 Validation Steps
 	1.	Upload new image with known person:
-	•	Confirm auto-tag occurs (high confidence)
+	[ ]	Confirm auto-tag occurs (high confidence)
 	2.	Upload borderline match:
-	•	Confirm suggestion appears
+	[ ]	Confirm suggestion appears
 	3.	Accept suggestion:
-	•	Verify correct tagging
+	[ ]	Verify correct tagging
 	4.	Reject suggestion:
-	•	Confirm not re-suggested
+	[ ]	Confirm not re-suggested
 	5.	Validate no incorrect auto-tags at low confidence
 
 ⸻
@@ -214,22 +213,22 @@ Continuously improve recognition accuracy using user feedback.
 Features
 
 Feedback Processing
-	•	Capture accept/reject actions
-	•	Store training signals
+	[ ]	Capture accept/reject actions
+	[ ]	Store training signals
 
 Model Refinement
-	•	Periodically retrain or adjust thresholds
-	•	Re-run clustering with improved embeddings
-	•	Re-evaluate previously unassigned faces
+	[ ]	Periodically retrain or adjust thresholds
+	[ ]	Re-run clustering with improved embeddings
+	[ ]	Re-evaluate previously unassigned faces
 
 Background Jobs
-	•	Schedule reprocessing jobs
-	•	Optimize embedding comparisons
+	[ ]	Schedule reprocessing jobs
+	[ ]	Optimize embedding comparisons
 
 Validation Steps
 	1.	Perform multiple accept/reject actions
 	2.	Trigger reprocessing job:
-	•	Confirm improved clustering
+	[ ]	Confirm improved clustering
 	3.	Validate fewer incorrect suggestions over time
 	4.	Confirm system stability during reprocessing
 
@@ -244,30 +243,30 @@ Deliver a fully intelligent, user-friendly photo discovery system.
 Features
 
 Advanced Queries
-	•	Multi-person inclusion/exclusion filters
-	•	Query: “Person A but not Person B”
+	[ ]	Multi-person inclusion/exclusion filters
+	[ ]	Query: “Person A but not Person B”
 
 Timeline View
-	•	Show chronological appearances of a person
-	•	Group by date/events
+	[ ]	Show chronological appearances of a person
+	[ ]	Group by date/events
 
 Smart Albums
-	•	Auto-generate albums per person
-	•	Add filters (date, location if available)
+	[ ]	Auto-generate albums per person
+	[ ]	Add filters (date, location if available)
 
 Relationship Insights (Optional)
-	•	Detect frequently co-occurring people
-	•	Display associations
+	[ ]	Detect frequently co-occurring people
+	[ ]	Display associations
 
 Validation Steps
 	1.	Run complex queries:
-	•	Verify correct filtering logic
+	[ ]	Verify correct filtering logic
 	2.	Open timeline view:
-	•	Confirm chronological accuracy
+	[ ]	Confirm chronological accuracy
 	3.	Check smart albums:
-	•	Validate auto-grouping
+	[ ]	Validate auto-grouping
 	4.	Test co-occurrence:
-	•	Ensure relationships are meaningful
+	[ ]	Ensure relationships are meaningful
 	5.	Confirm UI remains clean and minimal
 
 ⸻
@@ -277,16 +276,16 @@ MVP Recommendation
 If you want to ship fast:
 
 MVP Scope
-	•	Phase 1 + Phase 2
+	[ ]	Phase 1 + Phase 2
 
 Why
-	•	Immediate visible value
-	•	No risk of incorrect identity labeling
-	•	Builds strong foundation for everything else
+	[ ]	Immediate visible value
+	[ ]	No risk of incorrect identity labeling
+	[ ]	Builds strong foundation for everything else
 
 ⸻
 
 If you want, I can next:
-	•	Convert this into Jira epics + tickets with story points
-	•	Map each phase to your existing microservices and Next.js apps
-	•	Or design the exact API contracts between services
+	[ ]	Convert this into Jira epics + tickets with story points
+	[ ]	Map each phase to your existing microservices and Next.js apps
+	[ ]	Or design the exact API contracts between services

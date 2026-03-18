@@ -1,10 +1,12 @@
 use actix_cors::Cors;
 use actix_web::{middleware::Logger, post, web, App, HttpResponse, HttpServer};
-use std::sync::Arc;
+use ort::session::Session;
+use std::sync::{Arc, Mutex};
 use tracing::{error, info, warn};
 
 mod config;
 mod drive_client;
+mod face_detect;
 mod metadata;
 mod thumbnail;
 
@@ -16,6 +18,8 @@ use drive_client::{DriveJobsClient, JobResponse};
 struct WorkerState {
     drive: DriveJobsClient,
     photos_url: String,
+    /// Loaded InsightFace SCRFD session, or None if no model path was configured.
+    face_session: Option<Arc<Mutex<Session>>>,
     http: reqwest::Client,
 }
 
@@ -43,6 +47,18 @@ async fn dispatch(
 async fn process_job(state: &WorkerState, job: JobResponse) {
     let result = match job.job_type.as_str() {
         "thumbnail" => process_thumbnail(state, &job).await,
+        "face_detect" => {
+            face_detect::process_face_detect(
+                face_detect::FaceDetectDeps {
+                    drive: &state.drive,
+                    photos_url: &state.photos_url,
+                    face_session: state.face_session.clone(),
+                    http: &state.http,
+                },
+                &job,
+            )
+            .await
+        }
         other => Err(format!("Unknown job type: {}", other)),
     };
 
@@ -154,9 +170,42 @@ async fn main() -> std::io::Result<()> {
     env_logger::init();
 
     info!("Worker starting on port {}", config.port);
-    info!("Drive URL:     {}", config.drive_url);
-    info!("Photos URL:    {}", config.photos_url);
-    info!("Callback URL:  {}", config.callback_url);
+    info!("Drive URL:          {}", config.drive_url);
+    info!("Photos URL:         {}", config.photos_url);
+    info!(
+        "Face detect model:  {}",
+        if config.face_detect_model_path.is_empty() {
+            "<not configured>"
+        } else {
+            &config.face_detect_model_path
+        }
+    );
+    info!("Callback URL:       {}", config.callback_url);
+
+    // Load the InsightFace SCRFD ONNX session if a model path was provided.
+    let face_session: Option<Arc<Mutex<Session>>> = if config.face_detect_model_path.is_empty() {
+        warn!("FACE_DETECT_MODEL_PATH is not set — face_detect jobs will be skipped");
+        None
+    } else {
+        match Session::builder()
+            .map_err(|e| format!("ort session builder failed: {}", e))
+            .and_then(|b| {
+                b.commit_from_file(&config.face_detect_model_path)
+                    .map_err(|e| format!(
+                        "Failed to load face detection model from '{}': {}",
+                        config.face_detect_model_path, e
+                    ))
+            }) {
+            Ok(session) => {
+                info!("Loaded face detection model from '{}'", config.face_detect_model_path);
+                Some(Arc::new(Mutex::new(session)))
+            }
+            Err(e) => {
+                error!("{}", e);
+                std::process::exit(1);
+            }
+        }
+    };
 
     // Register with drive.
     let worker_id = DriveJobsClient::register(
@@ -185,6 +234,7 @@ async fn main() -> std::io::Result<()> {
             worker_id.clone(),
         ),
         photos_url: config.photos_url.clone(),
+        face_session,
         http: reqwest::Client::new(),
     });
 

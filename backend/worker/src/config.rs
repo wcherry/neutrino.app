@@ -6,6 +6,9 @@ pub struct Config {
     pub drive_url: String,
     /// Base URL of the photos service (e.g. http://localhost:8084).
     pub photos_url: String,
+    /// Filesystem path to the InsightFace SCRFD detection ONNX model file
+    /// (e.g. /models/det_10g.onnx). If empty, face_detect jobs are skipped.
+    pub face_detect_model_path: String,
     /// Shared secret for authenticating calls to the drive jobs API.
     pub worker_secret: String,
     /// Full URL that drive will POST to when dispatching a job
@@ -25,6 +28,9 @@ impl Config {
 
         let photos_url = env::var("PHOTOS_URL")
             .unwrap_or_else(|_| "http://localhost:8084".to_string());
+
+        let face_detect_model_path = env::var("FACE_DETECT_MODEL_PATH")
+            .unwrap_or_default();
 
         let worker_secret = env::var("WORKER_SECRET")
             .map_err(|_| "WORKER_SECRET environment variable is required")?;
@@ -52,6 +58,7 @@ impl Config {
         Ok(Config {
             drive_url,
             photos_url,
+            face_detect_model_path,
             worker_secret,
             callback_url,
             port,

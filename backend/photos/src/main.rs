@@ -14,12 +14,16 @@ use utoipa_swagger_ui::SwaggerUi;
 
 mod albums;
 mod config;
+mod faces;
 mod photos;
 mod schema;
 
 use crate::albums::api::{AlbumsApiDoc, AlbumsApiState};
 use crate::albums::repository::AlbumsRepository;
 use crate::albums::service::AlbumsService;
+use crate::faces::api::{FacesApiState, configure_faces};
+use crate::faces::repository::FacesRepository;
+use crate::faces::service::FacesService;
 use crate::photos::api::{PhotosApiDoc, PhotosApiState};
 use crate::photos::repository::PhotosRepository;
 use crate::photos::service::PhotosService;
@@ -104,6 +108,7 @@ async fn main() -> std::io::Result<()> {
 
     let photos_repo = Arc::new(PhotosRepository::new(pool.clone()));
     let albums_repo = Arc::new(AlbumsRepository::new(pool.clone()));
+    let faces_repo = Arc::new(FacesRepository::new(pool.clone()));
 
     let photos_service = Arc::new(PhotosService::new(
         photos_repo.clone(),
@@ -111,13 +116,16 @@ async fn main() -> std::io::Result<()> {
         config.drive_base_url.clone(),
         config.worker_secret.clone(),
     ));
-    let albums_service = Arc::new(AlbumsService::new(albums_repo, photos_repo));
+    let albums_service = Arc::new(AlbumsService::new(albums_repo, photos_repo.clone()));
+    let faces_service = Arc::new(FacesService::new(faces_repo, photos_repo));
 
     let photos_state = web::Data::new(PhotosApiState { photos_service });
     let albums_state = web::Data::new(AlbumsApiState { albums_service });
+    let faces_state = web::Data::new(FacesApiState { faces_service });
 
     let token_service_data = web::Data::new(token_service.clone());
     let pool_data = web::Data::new(pool.clone());
+    let faces_state_data = faces_state;
     let bind_addr = format!("0.0.0.0:{}", config.port);
 
     info!("Listening on {}", bind_addr);
@@ -129,6 +137,7 @@ async fn main() -> std::io::Result<()> {
             .app_data(pool_data.clone())
             .app_data(photos_state.clone())
             .app_data(albums_state.clone())
+            .app_data(faces_state_data.clone())
             .app_data(token_service_data.clone())
             .wrap(Logger::default())
             .wrap(Cors::permissive())
@@ -136,7 +145,8 @@ async fn main() -> std::io::Result<()> {
             .service(
                 web::scope("/api/v1")
                     .configure(photos::api::configure_photos)
-                    .configure(albums::api::configure_albums),
+                    .configure(albums::api::configure_albums)
+                    .configure(configure_faces),
             )
             .service(
                 SwaggerUi::new("/swagger-ui/{_:.*}")

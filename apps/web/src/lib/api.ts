@@ -1248,6 +1248,31 @@ export interface UpdatePhotoRequest {
   isArchived?: boolean;
 }
 
+export interface FaceBoundingBox {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  confidence: number;
+  imageWidth: number;
+  imageHeight: number;
+}
+
+export interface FaceResponse {
+  id: string;
+  photoId: string;
+  boundingBox: FaceBoundingBox;
+  thumbnail: string | null;
+  thumbnailMimeType: string | null;
+  personId: string | null;
+  createdAt: string;
+}
+
+export interface ListFacesResponse {
+  faces: FaceResponse[];
+  total: number;
+}
+
 export interface AlbumResponse {
   id: string;
   title: string;
@@ -1332,6 +1357,12 @@ export const photosApi = {
       method: 'POST',
       body: JSON.stringify({ fileId: fileItem.id } satisfies RegisterPhotoRequest),
     });
+  },
+};
+
+export const facesApi = {
+  async listFaces(photoId: string): Promise<ListFacesResponse> {
+    return request<ListFacesResponse>(`/api/v1/photos/${photoId}/faces`);
   },
 };
 

@@ -33,3 +33,16 @@ diesel::table! {
         added_at -> Timestamp,
     }
 }
+
+diesel::table! {
+    faces (id) {
+        id -> Text,
+        photo_id -> Text,
+        bounding_box -> Text,
+        thumbnail -> Nullable<Text>,
+        thumbnail_mime_type -> Nullable<Text>,
+        person_id -> Nullable<Text>,
+        embedding -> Nullable<Text>,
+        created_at -> Timestamp,
+    }
+}

@@ -68,9 +68,12 @@ impl PhotosService {
         };
         let photo = self.repo.insert_photo(new_photo)?;
 
-        // Enqueue thumbnail job via drive API — failure is non-fatal.
+        // Enqueue thumbnail + face detection jobs via drive API — failures are non-fatal.
         if let Err(e) = self.enqueue_thumbnail_job(&id, &req.file_id).await {
             tracing::warn!("Failed to enqueue thumbnail job for photo {}: {}", id, e);
+        }
+        if let Err(e) = self.enqueue_face_detect_job(&id, &req.file_id).await {
+            tracing::warn!("Failed to enqueue face_detect job for photo {}: {}", id, e);
         }
 
         Ok(self.to_response(
@@ -81,6 +84,28 @@ impl PhotosService {
                 .unwrap_or("application/octet-stream"),
             0,
         ))
+    }
+
+    async fn enqueue_face_detect_job(&self, photo_id: &str, file_id: &str) -> Result<(), String> {
+        let url = format!("{}/api/v1/jobs", self.drive_base_url);
+        let body = serde_json::json!({
+            "jobType": "face_detect",
+            "payload": { "photoId": photo_id, "fileId": file_id },
+            "timeoutSecs": 120
+        });
+        let resp = self
+            .http
+            .post(&url)
+            .header("Authorization", format!("Bearer {}", self.worker_secret))
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| format!("HTTP error: {}", e))?;
+        if resp.status().is_success() {
+            Ok(())
+        } else {
+            Err(format!("Drive jobs API returned {}", resp.status()))
+        }
     }
 
     async fn enqueue_thumbnail_job(&self, photo_id: &str, file_id: &str) -> Result<(), String> {

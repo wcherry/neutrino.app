@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { useQuery } from '@tanstack/react-query';
 import {
   X,
   Image as ImageIcon,
@@ -12,9 +13,10 @@ import {
   Camera,
   MapPin,
   Sun,
+  Users,
 } from 'lucide-react';
 import { Text, Heading } from '@neutrino/ui';
-import { type PhotoResponse } from '@/lib/api';
+import { facesApi, type PhotoResponse } from '@/lib/api';
 import { LocationMap } from './LocationMap';
 import styles from './PhotoInfoPanel.module.css';
 
@@ -53,6 +55,14 @@ export function PhotoInfoPanel({ photo, onClose }: Props) {
   const meta = photo.metadata;
   const exif = meta?.exif;
 
+  const facesQuery = useQuery({
+    queryKey: ['faces', photo.id],
+    queryFn: () => facesApi.listFaces(photo.id),
+    staleTime: 60_000,
+    enabled: photo.mimeType.startsWith('image/'),
+  });
+  const faces = facesQuery.data?.faces ?? [];
+
   const isVideo = photo.mimeType.startsWith('video/');
   const ext = photo.fileName.includes('.')
     ? photo.fileName.split('.').pop()!.toUpperCase()
@@ -89,6 +99,47 @@ export function PhotoInfoPanel({ photo, onClose }: Props) {
       <Text weight="medium" size="sm" truncate>
         {photo.fileName}
       </Text>
+
+      {/* Faces */}
+      {photo.mimeType.startsWith('image/') && (
+        <div className={styles.section}>
+          <div className={styles.sectionHeader}>
+            <Text size="xs" color="muted" weight="semibold">Faces</Text>
+            {faces.length > 0 && (
+              <span className={styles.badge}>{faces.length}</span>
+            )}
+          </div>
+          {facesQuery.isLoading ? (
+            <Text size="xs" color="muted">Detecting…</Text>
+          ) : faces.length === 0 ? (
+            <Text size="xs" color="muted">No faces detected</Text>
+          ) : (
+            <div className={styles.facesGrid}>
+              {faces.map((face) => {
+                const src = face.thumbnail && face.thumbnailMimeType
+                  ? `data:${face.thumbnailMimeType};base64,${face.thumbnail}`
+                  : null;
+                const pct = Math.round((face.boundingBox?.confidence ?? 0) * 100);
+                return (
+                  <div
+                    key={face.id}
+                    className={styles.faceThumb}
+                    title={`${pct}% confidence`}
+                  >
+                    {src ? (
+                      <img src={src} alt="Detected face" className={styles.faceThumbImg} />
+                    ) : (
+                      <div className={styles.faceThumbPlaceholder}>
+                        <Users size={16} />
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Details */}
       <div className={styles.section}>

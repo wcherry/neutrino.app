@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cargo build -p photos)",
+      "Bash(cargo build -p worker)",
+      "WebFetch(domain:crates.io)"
+    ]
+  }
+}
