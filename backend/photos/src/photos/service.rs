@@ -72,7 +72,7 @@ impl PhotosService {
         if let Err(e) = self.enqueue_thumbnail_job(&id, &req.file_id).await {
             tracing::warn!("Failed to enqueue thumbnail job for photo {}: {}", id, e);
         }
-        if let Err(e) = self.enqueue_face_detect_job(&id, &req.file_id).await {
+        if let Err(e) = self.enqueue_face_detect_job(&id, &req.file_id, &user.user_id).await {
             tracing::warn!("Failed to enqueue face_detect job for photo {}: {}", id, e);
         }
 
@@ -86,11 +86,11 @@ impl PhotosService {
         ))
     }
 
-    async fn enqueue_face_detect_job(&self, photo_id: &str, file_id: &str) -> Result<(), String> {
+    async fn enqueue_face_detect_job(&self, photo_id: &str, file_id: &str, user_id: &str) -> Result<(), String> {
         let url = format!("{}/api/v1/jobs", self.drive_base_url);
         let body = serde_json::json!({
             "jobType": "face_detect",
-            "payload": { "photoId": photo_id, "fileId": file_id },
+            "payload": { "photoId": photo_id, "fileId": file_id, "userId": user_id },
             "timeoutSecs": 120
         });
         let resp = self
@@ -337,6 +337,46 @@ impl PhotosService {
 
     pub fn get_thumbnail(&self, photo_id: &str) -> Result<Option<(String, String)>, ApiError> {
         self.repo.get_thumbnail(photo_id)
+    }
+
+    pub async fn list_photos_by_ids(
+        &self,
+        user: &AuthenticatedUser,
+        photo_ids: &[String],
+    ) -> Result<ListPhotosResponse, ApiError> {
+        let mut responses = Vec::with_capacity(photo_ids.len());
+        for photo_id in photo_ids {
+            let photo = match self.repo.get_photo(photo_id) {
+                Ok(p) => p,
+                Err(_) => continue,
+            };
+            if photo.user_id != user.user_id {
+                continue;
+            }
+            let file = self
+                .drive
+                .get_file(&user.token, &photo.file_id, "File not found")
+                .await
+                .ok();
+            let (name, mime_type) = if let Some(f) = file {
+                (
+                    f.name,
+                    f.mime_type
+                        .unwrap_or_else(|| "application/octet-stream".to_string()),
+                )
+            } else {
+                (
+                    "Unknown".to_string(),
+                    "application/octet-stream".to_string(),
+                )
+            };
+            responses.push(self.to_response(photo, &name, &mime_type, 0));
+        }
+        let total = responses.len();
+        Ok(ListPhotosResponse {
+            photos: responses,
+            total,
+        })
     }
 
     fn to_response(

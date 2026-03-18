@@ -50,25 +50,25 @@ Automatically group similar faces into clusters representing unknown individuals
 Features
 
 Embedding Generation
-	[ ]	Integrate face embedding model (e.g., ArcFace / InsightFace)
-	[ ]	Generate embedding vectors for each detected face
-	[ ]	Store embeddings in database (pgvector or equivalent)
+	[x]	Integrate face embedding model (e.g., ArcFace / InsightFace)
+	[x]	Generate embedding vectors for each detected face
+	[x]	Store embeddings in database (pgvector or equivalent)
 
 Clustering Engine
-	[ ]	Implement clustering algorithm (DBSCAN / cosine similarity)
-	[ ]	Group faces into clusters
-	[ ]	Create temporary “Person” records for clusters
-	[ ]	Assign faces → cluster/person_id
+	[x]	Implement clustering algorithm (DBSCAN / cosine similarity)
+	[x]	Group faces into clusters
+	[x]	Create temporary “Person” records for clusters
+	[x]	Assign faces → cluster/person_id
 
 UI — People (Beta)
-	[ ]	Create “People” page
-	[ ]	Display clusters as face cards
-	[ ]	Show representative thumbnail per cluster
-	[ ]	Display number of associated photos
+	[x]	Create “People” page
+	[x]	Display clusters as face cards
+	[x]	Show representative thumbnail per cluster
+	[x]	Display number of associated photos
 
 Cluster Exploration
-	[ ]	Click cluster → view all related photos
-	[ ]	Show all face thumbnails in cluster
+	[x]	Click cluster → view all related photos
+	[x]	Show all face thumbnails in cluster
 
 Validation Steps
 	1.	Upload multiple images of same person

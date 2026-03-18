@@ -1273,6 +1273,28 @@ export interface ListFacesResponse {
   total: number;
 }
 
+export interface PersonFaceThumbnail {
+  id: string;
+  thumbnail: string | null;
+  thumbnailMimeType: string | null;
+}
+
+export interface PersonResponse {
+  id: string;
+  coverFaceId: string | null;
+  coverThumbnail: string | null;
+  coverThumbnailMimeType: string | null;
+  faceCount: number;
+  faces: PersonFaceThumbnail[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ListPersonsResponse {
+  persons: PersonResponse[];
+  total: number;
+}
+
 export interface AlbumResponse {
   id: string;
   title: string;
@@ -1363,6 +1385,15 @@ export const photosApi = {
 export const facesApi = {
   async listFaces(photoId: string): Promise<ListFacesResponse> {
     return request<ListFacesResponse>(`/api/v1/photos/${photoId}/faces`);
+  },
+};
+
+export const personsApi = {
+  async listPersons(): Promise<ListPersonsResponse> {
+    return request<ListPersonsResponse>('/api/v1/photos/persons/list');
+  },
+  async listPersonPhotos(personId: string): Promise<ListPhotosResponse> {
+    return request<ListPhotosResponse>(`/api/v1/photo/persons/${personId}/photos`);
   },
 };
 

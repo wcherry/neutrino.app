@@ -41,4 +41,6 @@ pub struct SaveFaceRequest {
     /// Base64-encoded thumbnail of the cropped face (null if crop failed)
     pub thumbnail: Option<String>,
     pub thumbnail_mime_type: Option<String>,
+    /// L2-normalized ArcFace embedding vector (512 floats). Null if recognition model not loaded.
+    pub embedding: Option<Vec<f32>>,
 }

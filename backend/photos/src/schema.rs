@@ -46,3 +46,19 @@ diesel::table! {
         created_at -> Timestamp,
     }
 }
+
+diesel::joinable!(faces -> photos (photo_id));
+diesel::allow_tables_to_appear_in_same_query!(faces, photos);
+
+diesel::table! {
+    persons (id) {
+        id -> Text,
+        user_id -> Text,
+        cover_face_id -> Nullable<Text>,
+        cover_thumbnail -> Nullable<Text>,
+        cover_thumbnail_mime_type -> Nullable<Text>,
+        face_count -> Integer,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}

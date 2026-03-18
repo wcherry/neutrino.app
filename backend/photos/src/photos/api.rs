@@ -8,6 +8,7 @@ use shared::auth::AuthenticatedUser;
 use shared::ApiError;
 use std::sync::Arc;
 use utoipa::OpenApi;
+use tracing::{debug};
 
 pub struct PhotosApiState {
     pub photos_service: Arc<PhotosService>,

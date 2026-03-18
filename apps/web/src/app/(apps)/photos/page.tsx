@@ -13,19 +13,23 @@ import {
   Plus,
   X,
   Info,
+  Users,
 } from 'lucide-react';
 import {
   photosApi,
   albumsApi,
+  personsApi,
   type PhotoResponse,
   type AlbumResponse,
+  type PersonResponse,
   type FileItem,
 } from '@/lib/api';
 import { PhotoInfoPanel } from './PhotoInfoPanel';
+import { PersonPhotosPanel } from './PersonPhotosPanel';
 import { PreviewModal } from '../drive/PreviewModal';
 import styles from './page.module.css';
 
-type FilterTab = 'all' | 'favorites' | 'archive' | 'albums';
+type FilterTab = 'all' | 'favorites' | 'archive' | 'albums' | 'people';
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, {
@@ -156,6 +160,35 @@ function AlbumCard({ album }: { album: AlbumResponse }) {
   );
 }
 
+function PersonCard({ person, onClick }: { person: PersonResponse; onClick: () => void }) {
+  const faces = person.faces ?? [];
+  return (
+    <div className={styles.personCard} onClick={onClick}>
+      <div className={styles.personFaceStrip}>
+        {faces.length === 0 ? (
+          <div className={styles.personAvatarPlaceholder}>
+            <Users size={28} />
+          </div>
+        ) : (
+          faces.slice(0, 6).map((face) => {
+            const src = face.thumbnail && face.thumbnailMimeType
+              ? `data:${face.thumbnailMimeType};base64,${face.thumbnail}`
+              : null;
+            return src ? (
+              <img key={face.id} src={src} alt="" className={styles.personFaceThumb} />
+            ) : (
+              <div key={face.id} className={styles.personFaceThumbPlaceholder}>
+                <Users size={14} />
+              </div>
+            );
+          })
+        )}
+      </div>
+      <p className={styles.personCount}>{person.faceCount} {person.faceCount === 1 ? 'photo' : 'photos'}</p>
+    </div>
+  );
+}
+
 export default function PhotosPage() {
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<FilterTab>('all');
@@ -164,6 +197,7 @@ export default function PhotosPage() {
   const [newAlbumTitle, setNewAlbumTitle] = useState('');
   const [showNewAlbum, setShowNewAlbum] = useState(false);
   const [selectedPhoto, setSelectedPhoto] = useState<PhotoResponse | null>(null);
+  const [selectedPerson, setSelectedPerson] = useState<PersonResponse | null>(null);
   const [previewFile, setPreviewFile] = useState<FileItem | null>(null);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
@@ -190,13 +224,19 @@ export default function PhotosPage() {
       if (activeTab === 'albums') return photosApi.listPhotos();
       return photosApi.listPhotos();
     },
-    enabled: activeTab !== 'albums',
+    enabled: activeTab !== 'albums' && activeTab !== 'people',
   });
 
   const albumsQuery = useQuery({
     queryKey: ['albums'],
     queryFn: () => albumsApi.listAlbums(),
     enabled: activeTab === 'albums',
+  });
+
+  const personsQuery = useQuery({
+    queryKey: ['persons'],
+    queryFn: () => personsApi.listPersons(),
+    enabled: activeTab === 'people',
   });
 
   const uploadMutation = useMutation({
@@ -256,7 +296,8 @@ export default function PhotosPage() {
 
   const photos = photosQuery.data?.photos ?? [];
   const albums = albumsQuery.data?.albums ?? [];
-  const isLoading = photosQuery.isLoading || albumsQuery.isLoading;
+  const persons = personsQuery.data?.persons ?? [];
+  const isLoading = photosQuery.isLoading || albumsQuery.isLoading || personsQuery.isLoading;
 
   return (
     <div className={styles.page}>
@@ -298,7 +339,7 @@ export default function PhotosPage() {
       )}
 
       <div className={styles.filterTabs}>
-        {(['all', 'favorites', 'archive', 'albums'] as FilterTab[]).map((tab) => (
+        {(['all', 'favorites', 'archive', 'albums', 'people'] as FilterTab[]).map((tab) => (
           <button
             key={tab}
             className={`${styles.filterTab} ${activeTab === tab ? styles.filterTabActive : ''}`}
@@ -308,6 +349,7 @@ export default function PhotosPage() {
             {tab === 'favorites' && 'Favorites'}
             {tab === 'archive' && 'Archive'}
             {tab === 'albums' && 'Albums'}
+            {tab === 'people' && 'People'}
           </button>
         ))}
       </div>
@@ -315,6 +357,25 @@ export default function PhotosPage() {
       {isLoading ? (
         <div style={{ display: 'flex', justifyContent: 'center', padding: 'var(--space-16)' }}>
           <Spinner size="lg" />
+        </div>
+      ) : activeTab === 'people' ? (
+        <div className={styles.peopleSection}>
+          {persons.length === 0 ? (
+            <div className={styles.emptyState}>
+              <Users size={48} className={styles.emptyIcon} />
+              <p>No people detected yet. Upload photos and face detection will group them here.</p>
+            </div>
+          ) : (
+            <div className={styles.personGrid}>
+              {persons.map((person) => (
+                <PersonCard
+                  key={person.id}
+                  person={person}
+                  onClick={() => setSelectedPerson((prev) => prev?.id === person.id ? null : person)}
+                />
+              ))}
+            </div>
+          )}
         </div>
       ) : activeTab === 'albums' ? (
         <div className={styles.albumsSection}>
@@ -402,6 +463,13 @@ export default function PhotosPage() {
         <PhotoInfoPanel
           photo={selectedPhoto}
           onClose={() => setSelectedPhoto(null)}
+        />
+      )}
+
+      {selectedPerson && (
+        <PersonPhotosPanel
+          person={selectedPerson}
+          onClose={() => setSelectedPerson(null)}
         />
       )}
 

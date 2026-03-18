@@ -1,12 +1,14 @@
 use actix_cors::Cors;
-use actix_web::{middleware::Logger, post, web, App, HttpResponse, HttpServer};
+use actix_web::{middleware::Logger, post, web, App, HttpRequest, HttpResponse, HttpServer};
 use ort::session::Session;
 use std::sync::{Arc, Mutex};
 use tracing::{error, info, warn};
 
 mod config;
 mod drive_client;
+mod face_cluster;
 mod face_detect;
+mod face_recognize;
 mod metadata;
 mod thumbnail;
 
@@ -20,6 +22,10 @@ struct WorkerState {
     photos_url: String,
     /// Loaded InsightFace SCRFD session, or None if no model path was configured.
     face_session: Option<Arc<Mutex<Session>>>,
+    /// Loaded ArcFace recognition session, or None if no model path was configured.
+    recognition_session: Option<Arc<Mutex<Session>>>,
+    face_cluster_eps: f32,
+    face_cluster_min_samples: usize,
     http: reqwest::Client,
 }
 
@@ -42,6 +48,72 @@ async fn dispatch(
     HttpResponse::Accepted().finish()
 }
 
+// ── Admin endpoint — enqueue cluster jobs for all users ───────────────────────
+
+#[post("/admin/cluster-all")]
+async fn cluster_all(
+    state: web::Data<Arc<WorkerState>>,
+    req: HttpRequest,
+) -> HttpResponse {
+    // Require the worker secret in the Authorization header.
+    let expected = format!("Bearer {}", state.drive.worker_secret());
+    let auth = req
+        .headers()
+        .get("Authorization")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("");
+    if auth != expected {
+        return HttpResponse::Unauthorized().json(serde_json::json!({"error": "Unauthorized"}));
+    }
+
+    let users_url = format!("{}/api/v1/internal/users-with-faces", state.photos_url);
+    let user_ids: Vec<String> = match state.http.get(&users_url).send().await {
+        Ok(resp) if resp.status().is_success() => {
+            #[derive(serde::Deserialize)]
+            #[serde(rename_all = "camelCase")]
+            struct Body { user_ids: Vec<String> }
+            match resp.json::<Body>().await {
+                Ok(b) => b.user_ids,
+                Err(e) => {
+                    error!("Failed to parse users-with-faces response: {}", e);
+                    return HttpResponse::InternalServerError()
+                        .json(serde_json::json!({"error": "Failed to parse users response"}));
+                }
+            }
+        }
+        Ok(resp) => {
+            error!("users-with-faces returned {}", resp.status());
+            return HttpResponse::InternalServerError()
+                .json(serde_json::json!({"error": "Photos service error"}));
+        }
+        Err(e) => {
+            error!("Failed to reach photos service: {}", e);
+            return HttpResponse::InternalServerError()
+                .json(serde_json::json!({"error": "Photos service unreachable"}));
+        }
+    };
+
+    let count = user_ids.len();
+    info!("cluster-all: enqueuing face_cluster for {} user(s)", count);
+
+    for user_id in &user_ids {
+        if let Err(e) = state
+            .drive
+            .enqueue_job(
+                "face_cluster",
+                serde_json::json!({ "userId": user_id }),
+                120,
+                state.drive.worker_secret(),
+            )
+            .await
+        {
+            warn!("cluster-all: failed to enqueue job for user {}: {}", user_id, e);
+        }
+    }
+
+    HttpResponse::Ok().json(serde_json::json!({ "queued": count }))
+}
+
 // ── Job processing ────────────────────────────────────────────────────────────
 
 async fn process_job(state: &WorkerState, job: JobResponse) {
@@ -53,7 +125,20 @@ async fn process_job(state: &WorkerState, job: JobResponse) {
                     drive: &state.drive,
                     photos_url: &state.photos_url,
                     face_session: state.face_session.clone(),
+                    recognition_session: state.recognition_session.clone(),
                     http: &state.http,
+                },
+                &job,
+            )
+            .await
+        }
+        "face_cluster" => {
+            face_cluster::process_face_cluster(
+                face_cluster::FaceClusterDeps {
+                    photos_url: &state.photos_url,
+                    http: &state.http,
+                    eps: state.face_cluster_eps,
+                    min_samples: state.face_cluster_min_samples,
                 },
                 &job,
             )
@@ -170,17 +255,27 @@ async fn main() -> std::io::Result<()> {
     env_logger::init();
 
     info!("Worker starting on port {}", config.port);
-    info!("Drive URL:          {}", config.drive_url);
-    info!("Photos URL:         {}", config.photos_url);
+    info!("Drive URL:              {}", config.drive_url);
+    info!("Photos URL:             {}", config.photos_url);
     info!(
-        "Face detect model:  {}",
+        "Face detect model:      {}",
         if config.face_detect_model_path.is_empty() {
             "<not configured>"
         } else {
             &config.face_detect_model_path
         }
     );
-    info!("Callback URL:       {}", config.callback_url);
+    info!(
+        "Face recognition model: {}",
+        if config.face_recognition_model_path.is_empty() {
+            "<not configured>"
+        } else {
+            &config.face_recognition_model_path
+        }
+    );
+    info!("Cluster eps:            {}", config.face_cluster_eps);
+    info!("Cluster min_samples:    {}", config.face_cluster_min_samples);
+    info!("Callback URL:           {}", config.callback_url);
 
     // Load the InsightFace SCRFD ONNX session if a model path was provided.
     let face_session: Option<Arc<Mutex<Session>>> = if config.face_detect_model_path.is_empty() {
@@ -206,6 +301,35 @@ async fn main() -> std::io::Result<()> {
             }
         }
     };
+
+    // Load the ArcFace recognition ONNX session if a model path was provided.
+    let recognition_session: Option<Arc<Mutex<Session>>> =
+        if config.face_recognition_model_path.is_empty() {
+            warn!("FACE_RECOGNITION_MODEL_PATH is not set — face embeddings will be skipped");
+            None
+        } else {
+            match Session::builder()
+                .map_err(|e| format!("ort session builder failed: {}", e))
+                .and_then(|b| {
+                    b.commit_from_file(&config.face_recognition_model_path)
+                        .map_err(|e| format!(
+                            "Failed to load recognition model from '{}': {}",
+                            config.face_recognition_model_path, e
+                        ))
+                }) {
+                Ok(session) => {
+                    info!(
+                        "Loaded face recognition model from '{}'",
+                        config.face_recognition_model_path
+                    );
+                    Some(Arc::new(Mutex::new(session)))
+                }
+                Err(e) => {
+                    error!("{}", e);
+                    std::process::exit(1);
+                }
+            }
+        };
 
     // Register with drive.
     let worker_id = DriveJobsClient::register(
@@ -235,6 +359,9 @@ async fn main() -> std::io::Result<()> {
         ),
         photos_url: config.photos_url.clone(),
         face_session,
+        recognition_session,
+        face_cluster_eps: config.face_cluster_eps,
+        face_cluster_min_samples: config.face_cluster_min_samples,
         http: reqwest::Client::new(),
     });
 
@@ -265,6 +392,7 @@ async fn main() -> std::io::Result<()> {
             .wrap(Logger::default())
             .wrap(Cors::permissive())
             .service(dispatch)
+            .service(cluster_all)
     })
     .bind(&bind_addr)?
     .run()

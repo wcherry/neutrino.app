@@ -26,6 +26,13 @@ impl FacesService {
         let bounding_box_json = serde_json::to_string(&req.bounding_box)
             .map_err(|_| ApiError::internal("Failed to serialize bounding box"))?;
 
+        let embedding_json = req
+            .embedding
+            .as_ref()
+            .map(|e| serde_json::to_string(e))
+            .transpose()
+            .map_err(|_| ApiError::internal("Failed to serialize embedding"))?;
+
         let id = Uuid::new_v4().to_string();
         let now = chrono::Utc::now().naive_utc();
 
@@ -36,7 +43,7 @@ impl FacesService {
             thumbnail: req.thumbnail.as_deref(),
             thumbnail_mime_type: req.thumbnail_mime_type.as_deref(),
             person_id: None,
-            embedding: None,
+            embedding: embedding_json.as_deref(),
             created_at: now,
         };
 

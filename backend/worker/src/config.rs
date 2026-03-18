@@ -9,6 +9,13 @@ pub struct Config {
     /// Filesystem path to the InsightFace SCRFD detection ONNX model file
     /// (e.g. /models/det_10g.onnx). If empty, face_detect jobs are skipped.
     pub face_detect_model_path: String,
+    /// Filesystem path to the ArcFace recognition ONNX model file
+    /// (e.g. /models/w600k_r50.onnx). If empty, embeddings are skipped.
+    pub face_recognition_model_path: String,
+    /// DBSCAN epsilon: max cosine distance for two faces to be neighbours (default 0.4).
+    pub face_cluster_eps: f32,
+    /// DBSCAN min_samples: minimum cluster size (default 1).
+    pub face_cluster_min_samples: usize,
     /// Shared secret for authenticating calls to the drive jobs API.
     pub worker_secret: String,
     /// Full URL that drive will POST to when dispatching a job
@@ -31,6 +38,20 @@ impl Config {
 
         let face_detect_model_path = env::var("FACE_DETECT_MODEL_PATH")
             .unwrap_or_default();
+
+        let face_recognition_model_path = env::var("FACE_RECOGNITION_MODEL_PATH")
+            .unwrap_or_default();
+
+        let face_cluster_eps = env::var("FACE_CLUSTER_EPS")
+            .unwrap_or_else(|_| "0.4".to_string())
+            .parse::<f32>()
+            .unwrap_or(0.4);
+
+        let face_cluster_min_samples = env::var("FACE_CLUSTER_MIN_SAMPLES")
+            .unwrap_or_else(|_| "1".to_string())
+            .parse::<usize>()
+            .unwrap_or(1)
+            .max(1);
 
         let worker_secret = env::var("WORKER_SECRET")
             .map_err(|_| "WORKER_SECRET environment variable is required")?;
@@ -59,6 +80,9 @@ impl Config {
             drive_url,
             photos_url,
             face_detect_model_path,
+            face_recognition_model_path,
+            face_cluster_eps,
+            face_cluster_min_samples,
             worker_secret,
             callback_url,
             port,

@@ -1,4 +1,5 @@
 use crate::drive_client::{DriveJobsClient, JobResponse};
+use crate::face_recognize;
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use image::{DynamicImage, ImageFormat, Rgb, RgbImage};
 use ort::session::Session;
@@ -19,6 +20,8 @@ pub struct FaceDetectDeps<'a> {
     pub photos_url: &'a str,
     /// Loaded InsightFace SCRFD session (None → skip face detection).
     pub face_session: Option<Arc<Mutex<Session>>>,
+    /// Loaded ArcFace recognition session (None → skip embedding generation).
+    pub recognition_session: Option<Arc<Mutex<Session>>>,
     pub http: &'a reqwest::Client,
 }
 
@@ -31,6 +34,7 @@ pub async fn process_face_detect(
     struct Payload {
         photo_id: String,
         file_id: String,
+        user_id: String,
     }
 
     let payload: Payload = serde_json::from_value(job.payload.clone())
@@ -54,12 +58,14 @@ pub async fn process_face_detect(
     }
 
     let photo_id = payload.photo_id.clone();
+    let user_id = payload.user_id.clone();
     let photos_url = deps.photos_url.to_string();
     let http = deps.http.clone();
+    let recognition_session = deps.recognition_session.clone();
 
     // Decode image, run inference, and crop face thumbnails on the blocking pool.
     let results = tokio::task::spawn_blocking(move || {
-        detect_and_crop(&image_bytes, session)
+        detect_and_crop(&image_bytes, session, recognition_session.as_ref())
     })
     .await
     .map_err(|e| format!("Face detection task panicked: {}", e))??;
@@ -67,12 +73,13 @@ pub async fn process_face_detect(
     info!("Photo {}: {} face(s) detected", photo_id, results.len());
 
     // POST each detected face to the photos service (failures are non-fatal).
-    for (i, (bounding_box_json, thumb_b64)) in results.into_iter().enumerate() {
+    for (i, (bounding_box_json, thumb_b64, embedding)) in results.into_iter().enumerate() {
         let thumb_mime = thumb_b64.as_ref().map(|_| "image/jpeg");
         let body = serde_json::json!({
             "boundingBox": bounding_box_json,
             "thumbnail": thumb_b64,
             "thumbnailMimeType": thumb_mime,
+            "embedding": embedding,
         });
 
         let save_url = format!("{}/api/v1/photos/{}/faces", photos_url, photo_id);
@@ -92,15 +99,30 @@ pub async fn process_face_detect(
         }
     }
 
+    // Enqueue face_cluster job for this user so clusters are recomputed.
+    if let Err(e) = deps
+        .drive
+        .enqueue_job(
+            "face_cluster",
+            serde_json::json!({ "userId": user_id }),
+            120,
+            deps.drive.worker_secret(),
+        )
+        .await
+    {
+        warn!("Failed to enqueue face_cluster job for user {}: {}", user_id, e);
+    }
+
     Ok(())
 }
 
 /// Decode the image, run InsightFace SCRFD detection, and return one entry per face:
-/// `(bounding_box_json, Option<base64_jpeg_thumbnail>)`.
+/// `(bounding_box_json, Option<base64_jpeg_thumbnail>, Option<embedding_vec>)`.
 fn detect_and_crop(
     image_bytes: &[u8],
     session: Arc<Mutex<Session>>,
-) -> Result<Vec<(serde_json::Value, Option<String>)>, String> {
+    recognition_session: Option<&Arc<Mutex<Session>>>,
+) -> Result<Vec<(serde_json::Value, Option<String>, Option<Vec<f32>>)>, String> {
     let img = image::load_from_memory(image_bytes)
         .map_err(|e| format!("Failed to decode image: {}", e))?;
 
@@ -152,6 +174,17 @@ fn detect_and_crop(
         });
         let cropped = insightface::crop_face(&rgba32f, &scaled_kps, 112);
 
+        // Generate ArcFace embedding if recognition model is available.
+        let embedding = recognition_session.and_then(|sess| {
+            match face_recognize::compute_embedding(&cropped, sess) {
+                Ok(emb) => Some(emb),
+                Err(e) => {
+                    warn!("Failed to compute face embedding: {}", e);
+                    None
+                }
+            }
+        });
+
         let thumb_b64 = match rgba32f_to_jpeg_b64(&cropped) {
             Ok(b64) => Some(b64),
             Err(e) => {
@@ -160,7 +193,7 @@ fn detect_and_crop(
             }
         };
 
-        results.push((bounding_box_json, thumb_b64));
+        results.push((bounding_box_json, thumb_b64, embedding));
     }
 
     Ok(results)
@@ -176,7 +209,7 @@ fn image_to_nchw_tensor(
     let mut array = ndarray::Array::zeros([1, 3, h, w]);
     for y in 0..h {
         for x in 0..w {
-            let Rgb([r, g, b]) = *rgb.get_pixel(x as u32, y as u32);
+            let image::Rgb([r, g, b]) = *rgb.get_pixel(x as u32, y as u32);
             array[[0, 0, y, x]] = (r as f32 - 127.5) / 128.0;
             array[[0, 1, y, x]] = (g as f32 - 127.5) / 128.0;
             array[[0, 2, y, x]] = (b as f32 - 127.5) / 128.0;

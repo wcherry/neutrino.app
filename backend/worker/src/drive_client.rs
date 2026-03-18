@@ -38,6 +38,41 @@ impl DriveJobsClient {
         format!("Bearer {}", self.worker_secret)
     }
 
+    pub fn worker_secret(&self) -> &str {
+        &self.worker_secret
+    }
+
+    /// Enqueue a new job via the drive jobs API.
+    pub async fn enqueue_job(
+        &self,
+        job_type: &str,
+        payload: serde_json::Value,
+        timeout_secs: i64,
+        secret: &str,
+    ) -> Result<(), String> {
+        let url = format!("{}/api/v1/jobs", self.base_url);
+        let body = serde_json::json!({
+            "jobType": job_type,
+            "payload": payload,
+            "timeoutSecs": timeout_secs,
+        });
+        let resp = self
+            .http
+            .post(&url)
+            .header("Authorization", format!("Bearer {}", secret))
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| format!("Enqueue job failed: {}", e))?;
+        if resp.status().is_success() {
+            Ok(())
+        } else {
+            let s = resp.status();
+            let b = resp.text().await.unwrap_or_default();
+            Err(format!("Enqueue job returned ({}): {}", s, b))
+        }
+    }
+
     /// Register this worker with drive and return the assigned worker ID.
     pub async fn register(
         base_url: &str,
