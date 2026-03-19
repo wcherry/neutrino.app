@@ -138,18 +138,18 @@ Enable users to find photos by people quickly and intuitively.
 Features
 
 Search Integration
-	[ ]	Extend search index to include person_id
-	[ ]	Support queries like “Photos of [Person]”
+	[x]	Extend search index to include person_id
+	[x]	Support queries like “Photos of [Person]”
 
 Filtering System
-	[ ]	Add filter by person
-	[ ]	Add multi-person filtering (AND logic)
-	[ ]	Add filter UI component (dropdown or chips)
+	[x]	Add filter by person
+	[x]	Add multi-person filtering (AND logic)
+	[x]	Add filter UI component (dropdown or chips)
 
 UI — Search Experience
-	[ ]	Add person suggestions in search bar
-	[ ]	Display person tokens/chips in active filters
-	[ ]	Integrate filters into photo grid view
+	[x]	Add person suggestions in search bar
+	[x]	Display person tokens/chips in active filters
+	[x]	Integrate filters into photo grid view
 
 Validation Steps
 	1.	Search by person name:

@@ -1323,10 +1323,12 @@ export const photosApi = {
   async listPhotos(opts?: {
     archivedOnly?: boolean;
     starredOnly?: boolean;
+    personIds?: string[];
   }): Promise<ListPhotosResponse> {
     const qs = buildQuery({
       archivedOnly: opts?.archivedOnly,
       starredOnly: opts?.starredOnly,
+      personIds: opts?.personIds?.length ? opts.personIds.join(',') : undefined,
     });
     return request<ListPhotosResponse>(`/api/v1/photos${qs}`);
   },

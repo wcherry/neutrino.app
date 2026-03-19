@@ -362,6 +362,170 @@
   margin: 0;
 }
 
+/* ── Person filter bar ─────────────────────────────────────── */
+
+.filterBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  min-height: 32px;
+}
+
+.filterBarLeft {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.filterChip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 3px var(--space-2);
+  border-radius: var(--radius-full, 9999px);
+  background: var(--color-primary-subtle, #eef2ff);
+  color: var(--color-primary, #4f46e5);
+  font-size: var(--font-size-xs);
+  font-weight: 500;
+  border: 1px solid var(--color-primary-muted, #c7d2fe);
+}
+
+.filterChipRemove {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: inherit;
+  padding: 0;
+  opacity: 0.7;
+  transition: opacity 0.1s;
+}
+
+.filterChipRemove:hover {
+  opacity: 1;
+}
+
+.clearFiltersBtn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary, #6b7280);
+  padding: 0 var(--space-1);
+  text-decoration: underline;
+}
+
+.clearFiltersBtn:hover {
+  color: var(--color-text, #111827);
+}
+
+.personFilterDropdown {
+  position: relative;
+}
+
+.filterDropdownTrigger {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--color-border, #e5e7eb);
+  border-radius: var(--radius-md);
+  background: var(--color-surface, white);
+  font-size: var(--font-size-sm);
+  color: var(--color-text, #111827);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  white-space: nowrap;
+}
+
+.filterDropdownTrigger:hover {
+  border-color: var(--color-primary, #4f46e5);
+  background: var(--color-primary-subtle, #eef2ff);
+}
+
+.filterDropdownMenu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 50;
+  min-width: 200px;
+  background: var(--color-surface, white);
+  border: 1px solid var(--color-border, #e5e7eb);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg, 0 10px 15px -3px rgba(0,0,0,0.1));
+  overflow: hidden;
+}
+
+.filterDropdownSearch {
+  display: block;
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border: none;
+  border-bottom: 1px solid var(--color-border, #e5e7eb);
+  font-size: var(--font-size-sm);
+  outline: none;
+  background: transparent;
+  box-sizing: border-box;
+}
+
+.filterDropdownList {
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.filterDropdownItem {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: var(--font-size-sm);
+  color: var(--color-text, #111827);
+  text-align: left;
+  transition: background 0.1s;
+}
+
+.filterDropdownItem:hover {
+  background: var(--color-bg-subtle, #f9fafb);
+}
+
+.filterDropdownAvatar {
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-full, 9999px);
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.filterDropdownAvatarPlaceholder {
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-full, 9999px);
+  background: var(--color-surface-subtle, #f3f4f6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-tertiary, #9ca3af);
+  flex-shrink: 0;
+}
+
+.filterDropdownEmpty {
+  padding: var(--space-3);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary, #6b7280);
+  text-align: center;
+}
+
+/* ─────────────────────────────────────────────────────────── */
+
 .errorBanner {
   padding: var(--space-3) var(--space-4);
   background: var(--color-danger-subtle, #fef2f2);

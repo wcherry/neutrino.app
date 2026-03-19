@@ -130,6 +130,30 @@ impl PhotosService {
         }
     }
 
+    pub async fn list_photos_by_person_filter(
+        &self,
+        user: &AuthenticatedUser,
+        person_ids: &[String],
+    ) -> Result<ListPhotosResponse, ApiError> {
+        if person_ids.is_empty() {
+            return self.list_photos(user, false, false).await;
+        }
+
+        // Compute the intersection: photos containing faces from ALL selected persons.
+        let mut sets: Vec<std::collections::HashSet<String>> = Vec::with_capacity(person_ids.len());
+        for pid in person_ids {
+            let ids = self.repo.get_photo_ids_for_person(&user.user_id, pid)?;
+            sets.push(ids.into_iter().collect());
+        }
+        let intersection: Vec<String> = sets[0]
+            .iter()
+            .filter(|id| sets[1..].iter().all(|s| s.contains(*id)))
+            .cloned()
+            .collect();
+
+        self.list_photos_by_ids(user, &intersection).await
+    }
+
     pub async fn list_photos(
         &self,
         user: &AuthenticatedUser,

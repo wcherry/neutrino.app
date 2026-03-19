@@ -14,6 +14,7 @@ import {
   X,
   Info,
   Users,
+  ChevronDown,
 } from 'lucide-react';
 import {
   photosApi,
@@ -202,6 +203,10 @@ export default function PhotosPage() {
   const [previewFile, setPreviewFile] = useState<FileItem | null>(null);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
+  const [personFilterIds, setPersonFilterIds] = useState<string[]>([]);
+  const [personFilterOpen, setPersonFilterOpen] = useState(false);
+  const [personFilterSearch, setPersonFilterSearch] = useState('');
+  const personFilterRef = useRef<HTMLDivElement>(null);
   const uploadInputRef = useRef<HTMLInputElement>(null);
 
   function openPreview(photo: PhotoResponse) {
@@ -218,11 +223,11 @@ export default function PhotosPage() {
   }
 
   const photosQuery = useQuery({
-    queryKey: ['photos', activeTab],
+    queryKey: ['photos', activeTab, personFilterIds],
     queryFn: () => {
       if (activeTab === 'favorites') return photosApi.listPhotos({ starredOnly: true });
       if (activeTab === 'archive') return photosApi.listPhotos({ archivedOnly: true });
-      if (activeTab === 'albums') return photosApi.listPhotos();
+      if (personFilterIds.length > 0) return photosApi.listPhotos({ personIds: personFilterIds });
       return photosApi.listPhotos();
     },
     enabled: activeTab !== 'albums' && activeTab !== 'people',
@@ -234,11 +239,22 @@ export default function PhotosPage() {
     enabled: activeTab === 'albums',
   });
 
+  // Always fetch persons so they're available for the filter bar.
   const personsQuery = useQuery({
     queryKey: ['persons'],
     queryFn: () => personsApi.listPersons(),
-    enabled: activeTab === 'people',
   });
+
+  // Close dropdown when clicking outside.
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (personFilterRef.current && !personFilterRef.current.contains(e.target as Node)) {
+        setPersonFilterOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const uploadMutation = useMutation({
     mutationFn: (file: File) =>
@@ -298,7 +314,18 @@ export default function PhotosPage() {
   const photos = photosQuery.data?.photos ?? [];
   const albums = albumsQuery.data?.albums ?? [];
   const persons = personsQuery.data?.persons ?? [];
-  const isLoading = photosQuery.isLoading || albumsQuery.isLoading || personsQuery.isLoading;
+  const isLoading =
+    (activeTab === 'people' ? personsQuery.isLoading : false) ||
+    (activeTab === 'albums' ? albumsQuery.isLoading : false) ||
+    (['all', 'favorites', 'archive'].includes(activeTab) ? photosQuery.isLoading : false);
+
+  const filteredPersonSuggestions = persons.filter((p) => {
+    const name = p.name ?? 'Unknown person';
+    return (
+      !personFilterIds.includes(p.id) &&
+      name.toLowerCase().includes(personFilterSearch.toLowerCase())
+    );
+  });
 
   return (
     <div className={styles.page}>
@@ -344,7 +371,13 @@ export default function PhotosPage() {
           <button
             key={tab}
             className={`${styles.filterTab} ${activeTab === tab ? styles.filterTabActive : ''}`}
-            onClick={() => setActiveTab(tab)}
+            onClick={() => {
+              setActiveTab(tab);
+              if (tab !== 'all') {
+                setPersonFilterIds([]);
+                setPersonFilterOpen(false);
+              }
+            }}
           >
             {tab === 'all' && 'All Photos'}
             {tab === 'favorites' && 'Favorites'}
@@ -354,6 +387,97 @@ export default function PhotosPage() {
           </button>
         ))}
       </div>
+
+      {activeTab === 'all' && persons.length > 0 && (
+        <div className={styles.filterBar}>
+          <div className={styles.filterBarLeft}>
+            {personFilterIds.length > 0 && (
+              <>
+                {personFilterIds.map((pid) => {
+                  const p = persons.find((p) => p.id === pid);
+                  return (
+                    <span key={pid} className={styles.filterChip}>
+                      <Users size={12} />
+                      {p?.name ?? 'Unknown person'}
+                      <button
+                        className={styles.filterChipRemove}
+                        onClick={() => setPersonFilterIds((ids) => ids.filter((id) => id !== pid))}
+                        aria-label="Remove filter"
+                      >
+                        <X size={11} />
+                      </button>
+                    </span>
+                  );
+                })}
+                <button
+                  className={styles.clearFiltersBtn}
+                  onClick={() => setPersonFilterIds([])}
+                >
+                  Clear
+                </button>
+              </>
+            )}
+          </div>
+
+          <div className={styles.personFilterDropdown} ref={personFilterRef}>
+            <button
+              className={styles.filterDropdownTrigger}
+              onClick={() => {
+                setPersonFilterOpen((v) => !v);
+                setPersonFilterSearch('');
+              }}
+            >
+              <Users size={14} />
+              People
+              <ChevronDown size={13} />
+            </button>
+
+            {personFilterOpen && (
+              <div className={styles.filterDropdownMenu}>
+                <input
+                  autoFocus
+                  className={styles.filterDropdownSearch}
+                  placeholder="Search people..."
+                  value={personFilterSearch}
+                  onChange={(e) => setPersonFilterSearch(e.target.value)}
+                />
+                <div className={styles.filterDropdownList}>
+                  {filteredPersonSuggestions.length === 0 ? (
+                    <div className={styles.filterDropdownEmpty}>No matches</div>
+                  ) : (
+                    filteredPersonSuggestions.map((p) => {
+                      const src =
+                        p.coverThumbnail && p.coverThumbnailMimeType
+                          ? `data:${p.coverThumbnailMimeType};base64,${p.coverThumbnail}`
+                          : null;
+                      return (
+                        <button
+                          key={p.id}
+                          className={styles.filterDropdownItem}
+                          onClick={() => {
+                            setPersonFilterIds((ids) => [...ids, p.id]);
+                            setPersonFilterOpen(false);
+                            setPersonFilterSearch('');
+                          }}
+                        >
+                          {src ? (
+                            <img src={src} alt="" className={styles.filterDropdownAvatar} />
+                          ) : (
+                            <div className={styles.filterDropdownAvatarPlaceholder}>
+                              <Users size={12} />
+                            </div>
+                          )}
+                          <span>{p.name ?? 'Unknown person'}</span>
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {isLoading ? (
         <div style={{ display: 'flex', justifyContent: 'center', padding: 'var(--space-16)' }}>

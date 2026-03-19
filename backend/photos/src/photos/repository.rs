@@ -192,6 +192,28 @@ impl PhotosRepository {
         })
     }
 
+    pub fn get_photo_ids_for_person(
+        &self,
+        user_id: &str,
+        person_id: &str,
+    ) -> Result<Vec<String>, ApiError> {
+        use crate::schema::faces;
+        let mut conn = self.get_conn()?;
+        photos::table
+            .inner_join(faces::table.on(faces::photo_id.eq(photos::id)))
+            .filter(photos::user_id.eq(user_id))
+            .filter(photos::deleted_at.is_null())
+            .filter(photos::is_archived.eq(false))
+            .filter(faces::person_id.eq(person_id))
+            .select(photos::id)
+            .distinct()
+            .load::<String>(&mut conn)
+            .map_err(|e| {
+                tracing::error!("DB get photo ids for person error: {:?}", e);
+                ApiError::internal("Database error")
+            })
+    }
+
     pub fn empty_trash(&self, user_id: &str) -> Result<usize, ApiError> {
         let mut conn = self.get_conn()?;
         diesel::delete(

@@ -20,6 +20,7 @@ pub struct PhotosApiState {
     params(
         ("archivedOnly" = Option<bool>, Query, description = "Include archived photos"),
         ("starredOnly" = Option<bool>, Query, description = "Show only starred photos"),
+        ("personIds" = Option<String>, Query, description = "Comma-separated person IDs to filter by (AND logic)"),
     ),
     responses(
         (status = 200, description = "List of photos", body = ListPhotosResponse),
@@ -33,18 +34,35 @@ pub async fn list_photos(
     user: AuthenticatedUser,
     query: web::Query<std::collections::HashMap<String, String>>,
 ) -> Result<web::Json<ListPhotosResponse>, ApiError> {
-    let include_archived = query
-        .get("archivedOnly")
-        .map(|v| v == "true")
-        .unwrap_or(false);
-    let starred_only = query
-        .get("starredOnly")
-        .map(|v| v == "true")
-        .unwrap_or(false);
-    let result = state
-        .photos_service
-        .list_photos(&user, include_archived, starred_only)
-        .await?;
+    let person_ids: Vec<String> = query
+        .get("personIds")
+        .map(|v| {
+            v.split(',')
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let result = if !person_ids.is_empty() {
+        state
+            .photos_service
+            .list_photos_by_person_filter(&user, &person_ids)
+            .await?
+    } else {
+        let include_archived = query
+            .get("archivedOnly")
+            .map(|v| v == "true")
+            .unwrap_or(false);
+        let starred_only = query
+            .get("starredOnly")
+            .map(|v| v == "true")
+            .unwrap_or(false);
+        state
+            .photos_service
+            .list_photos(&user, include_archived, starred_only)
+            .await?
+    };
     Ok(web::Json(result))
 }
 
