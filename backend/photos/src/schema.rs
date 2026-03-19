@@ -47,8 +47,21 @@ diesel::table! {
     }
 }
 
+diesel::table! {
+    face_suggestions (id) {
+        id -> Text,
+        face_id -> Text,
+        person_id -> Text,
+        confidence -> Float,
+        status -> Text,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
 diesel::joinable!(faces -> photos (photo_id));
-diesel::allow_tables_to_appear_in_same_query!(faces, photos);
+diesel::joinable!(face_suggestions -> faces (face_id));
+diesel::allow_tables_to_appear_in_same_query!(face_suggestions, faces, photos);
 
 diesel::table! {
     persons (id) {

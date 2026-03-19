@@ -6,17 +6,24 @@ use crate::persons::{
     },
     repository::PersonsRepository,
 };
+use crate::suggestions::repository::SuggestionsRepository;
 use shared::ApiError;
 use std::sync::Arc;
 use uuid::Uuid;
 
+/// Cosine distance below which a face is auto-tagged to a named person.
+const AUTO_TAG_THRESHOLD: f32 = 0.30;
+/// Cosine distance below which a suggestion is created (but not auto-tagged).
+const SUGGEST_THRESHOLD: f32 = 0.55;
+
 pub struct PersonsService {
     repo: Arc<PersonsRepository>,
+    suggestions_repo: Arc<SuggestionsRepository>,
 }
 
 impl PersonsService {
-    pub fn new(repo: Arc<PersonsRepository>) -> Self {
-        PersonsService { repo }
+    pub fn new(repo: Arc<PersonsRepository>, suggestions_repo: Arc<SuggestionsRepository>) -> Self {
+        PersonsService { repo, suggestions_repo }
     }
 
     fn person_response_from_record(
@@ -164,23 +171,182 @@ impl PersonsService {
     }
 
     /// Save clustering results from the worker.
+    ///
+    /// Enhanced behaviour:
+    /// 1. Named persons whose faces still appear in a cluster keep their ID and name (identity preserved).
+    /// 2. Unmatched new clusters are compared against named persons by embedding similarity:
+    ///    - ≤ AUTO_TAG_THRESHOLD: auto-assign the name to the new cluster.
+    ///    - ≤ SUGGEST_THRESHOLD: create a face_suggestion for user review.
     pub fn save_clusters(&self, req: SaveClustersRequest) -> Result<(), ApiError> {
         let now = chrono::Utc::now().naive_utc();
-        let clusters: Vec<(String, Vec<String>, Option<String>, Option<String>, Option<String>)> =
-            req.clusters
+
+        // ── 1. Load existing named persons + their face_ids ──────────────────
+        let named_persons = self.repo.list_named_persons_for_user(&req.user_id)?;
+
+        // face_id → (person_id, name)
+        let mut face_to_named: std::collections::HashMap<String, (String, String)> =
+            std::collections::HashMap::new();
+        for person in &named_persons {
+            if let Some(name) = &person.name {
+                let face_records = self.repo.list_faces_for_person(&person.id)?;
+                for face in face_records {
+                    face_to_named.insert(face.id, (person.id.clone(), name.clone()));
+                }
+            }
+        }
+
+        // ── 2. Load all embeddings for embedding-based matching ──────────────
+        // face_id → embedding
+        let all_embeddings: std::collections::HashMap<String, Vec<f32>> = {
+            self.repo
+                .list_face_embeddings_for_user(&req.user_id)?
                 .into_iter()
-                .map(|c: ClusterEntry| {
-                    let person_id = Uuid::new_v4().to_string();
-                    (
-                        person_id,
-                        c.face_ids,
-                        Some(c.cover_face_id),
-                        c.cover_thumbnail,
-                        c.cover_thumbnail_mime_type,
-                    )
+                .filter_map(|f| {
+                    let emb: Vec<f32> = serde_json::from_str(f.embedding.as_deref()?).ok()?;
+                    Some((f.id, emb))
                 })
+                .collect()
+        };
+
+        // Compute average embedding per named person.
+        let person_avg_embeddings: std::collections::HashMap<String, Vec<f32>> = named_persons
+            .iter()
+            .filter_map(|p| {
+                let face_records = self.repo.list_faces_for_person(&p.id).ok()?;
+                let embs: Vec<Vec<f32>> = face_records
+                    .iter()
+                    .filter_map(|f| {
+                        let e: Vec<f32> = serde_json::from_str(f.embedding.as_deref()?).ok()?;
+                        Some(e)
+                    })
+                    .collect();
+                if embs.is_empty() {
+                    return None;
+                }
+                let dim = embs[0].len();
+                let avg: Vec<f32> = (0..dim)
+                    .map(|i| embs.iter().map(|e| e[i]).sum::<f32>() / embs.len() as f32)
+                    .collect();
+                Some((p.id.clone(), avg))
+            })
+            .collect();
+
+        // ── 3. Resolve each cluster: assign person_id + optional name ────────
+        type ClusterRow = (String, Vec<String>, Option<String>, Option<String>, Option<String>, Option<String>);
+        let mut resolved: Vec<ClusterRow> = Vec::with_capacity(req.clusters.len());
+        // person_id of named persons that have been "claimed" by a cluster (so each named
+        // person is assigned to at most one cluster).
+        let mut claimed_named_persons: std::collections::HashSet<String> =
+            std::collections::HashSet::new();
+
+        // Pending suggestions: (face_id, person_id, confidence)
+        let mut pending_suggestions: Vec<(String, String, f32)> = Vec::new();
+
+        for cluster in req.clusters {
+            // Count face overlap with each named person.
+            let mut votes: std::collections::HashMap<String, (usize, String, String)> =
+                std::collections::HashMap::new(); // person_id → (count, person_id, name)
+            for fid in &cluster.face_ids {
+                if let Some((pid, name)) = face_to_named.get(fid) {
+                    let e = votes.entry(pid.clone()).or_insert((0, pid.clone(), name.clone()));
+                    e.0 += 1;
+                }
+            }
+
+            // Best named-person match by face overlap (unclaimed).
+            let best_by_faces = votes
+                .into_values()
+                .filter(|(_, pid, _)| !claimed_named_persons.contains(pid))
+                .max_by_key(|(count, _, _)| *count);
+
+            if let Some((_, pid, name)) = best_by_faces {
+                // Reuse the existing named person's ID so it survives re-clustering.
+                claimed_named_persons.insert(pid.clone());
+                resolved.push((
+                    pid,
+                    cluster.face_ids,
+                    Some(cluster.cover_face_id),
+                    cluster.cover_thumbnail,
+                    cluster.cover_thumbnail_mime_type,
+                    Some(name),
+                ));
+                continue;
+            }
+
+            // No face overlap with any named person — try embedding similarity.
+            let cluster_embs: Vec<&Vec<f32>> = cluster
+                .face_ids
+                .iter()
+                .filter_map(|fid| all_embeddings.get(fid))
                 .collect();
-        self.repo.apply_clusters(&req.user_id, &clusters, now)
+
+            let best_emb_match: Option<(String, f32)> = if !cluster_embs.is_empty()
+                && !person_avg_embeddings.is_empty()
+            {
+                let dim = cluster_embs[0].len();
+                let cluster_avg: Vec<f32> = (0..dim)
+                    .map(|i| cluster_embs.iter().map(|e| e[i]).sum::<f32>() / cluster_embs.len() as f32)
+                    .collect();
+
+                person_avg_embeddings
+                    .iter()
+                    .filter(|(pid, _)| !claimed_named_persons.contains(*pid))
+                    .map(|(pid, avg)| {
+                        let dot: f32 = cluster_avg.iter().zip(avg.iter()).map(|(a, b)| a * b).sum();
+                        (pid.clone(), 1.0 - dot.clamp(-1.0, 1.0))
+                    })
+                    .min_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal))
+            } else {
+                None
+            };
+
+            let (person_id, name) = match best_emb_match {
+                Some((pid, dist)) if dist <= AUTO_TAG_THRESHOLD => {
+                    if let Some(p) = named_persons.iter().find(|p| p.id == pid) {
+                        if !claimed_named_persons.contains(&pid) {
+                            claimed_named_persons.insert(pid.clone());
+                            (pid, p.name.clone())
+                        } else {
+                            (Uuid::new_v4().to_string(), None)
+                        }
+                    } else {
+                        (Uuid::new_v4().to_string(), None)
+                    }
+                }
+                Some((pid, dist)) if dist <= SUGGEST_THRESHOLD => {
+                    // Medium confidence: create suggestion using cover face.
+                    pending_suggestions.push((
+                        cluster.cover_face_id.clone(),
+                        pid.clone(),
+                        1.0 - dist,
+                    ));
+                    (Uuid::new_v4().to_string(), None)
+                }
+                _ => (Uuid::new_v4().to_string(), None),
+            };
+
+            resolved.push((
+                person_id,
+                cluster.face_ids,
+                Some(cluster.cover_face_id),
+                cluster.cover_thumbnail,
+                cluster.cover_thumbnail_mime_type,
+                name,
+            ));
+        }
+
+        // ── 4. Apply clusters ────────────────────────────────────────────────
+        self.repo.apply_clusters(&req.user_id, &resolved, now)?;
+
+        // ── 5. Persist suggestions ────────────────────────────────────────────
+        for (face_id, person_id, confidence) in pending_suggestions {
+            let id = Uuid::new_v4().to_string();
+            let _ = self.suggestions_repo.insert_if_not_rejected(
+                &id, &face_id, &person_id, confidence, now,
+            );
+        }
+
+        Ok(())
     }
 
     /// Returns distinct photo IDs for photos that contain this person's faces.

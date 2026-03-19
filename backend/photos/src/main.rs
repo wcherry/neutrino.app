@@ -18,6 +18,7 @@ mod faces;
 mod persons;
 mod photos;
 mod schema;
+mod suggestions;
 
 use crate::albums::api::{AlbumsApiDoc, AlbumsApiState};
 use crate::albums::repository::AlbumsRepository;
@@ -28,6 +29,9 @@ use crate::faces::service::FacesService;
 use crate::persons::api::{PersonsApiState, configure_persons};
 use crate::persons::repository::PersonsRepository;
 use crate::persons::service::PersonsService;
+use crate::suggestions::api::{SuggestionsApiState, configure_suggestions};
+use crate::suggestions::repository::SuggestionsRepository;
+use crate::suggestions::service::SuggestionsService;
 use crate::photos::api::{PhotosApiDoc, PhotosApiState};
 use crate::photos::repository::PhotosRepository;
 use crate::photos::service::PhotosService;
@@ -114,6 +118,7 @@ async fn main() -> std::io::Result<()> {
     let albums_repo = Arc::new(AlbumsRepository::new(pool.clone()));
     let faces_repo = Arc::new(FacesRepository::new(pool.clone()));
     let persons_repo = Arc::new(PersonsRepository::new(pool.clone()));
+    let suggestions_repo = Arc::new(SuggestionsRepository::new(pool.clone()));
 
     let photos_service = Arc::new(PhotosService::new(
         photos_repo.clone(),
@@ -122,8 +127,13 @@ async fn main() -> std::io::Result<()> {
         config.worker_secret.clone(),
     ));
     let albums_service = Arc::new(AlbumsService::new(albums_repo, photos_repo.clone()));
-    let faces_service = Arc::new(FacesService::new(faces_repo, photos_repo));
-    let persons_service = Arc::new(PersonsService::new(persons_repo));
+    let faces_service = Arc::new(FacesService::new(faces_repo.clone(), photos_repo));
+    let persons_service = Arc::new(PersonsService::new(persons_repo.clone(), suggestions_repo.clone()));
+    let suggestions_service = Arc::new(SuggestionsService::new(
+        suggestions_repo,
+        faces_repo,
+        persons_repo,
+    ));
 
     let photos_state = web::Data::new(PhotosApiState { photos_service: photos_service.clone() });
     let albums_state = web::Data::new(AlbumsApiState { albums_service });
@@ -132,6 +142,7 @@ async fn main() -> std::io::Result<()> {
         persons_service,
         photos_service,
     });
+    let suggestions_state = web::Data::new(SuggestionsApiState { suggestions_service });
 
     let token_service_data = web::Data::new(token_service.clone());
     let pool_data = web::Data::new(pool.clone());
@@ -140,6 +151,8 @@ async fn main() -> std::io::Result<()> {
     let bind_addr = format!("0.0.0.0:{}", config.port);
 
     info!("Listening on {}", bind_addr);
+
+    let suggestions_state_data = suggestions_state;
 
     HttpServer::new(move || {
         let photos_openapi = PhotosApiDoc::openapi();
@@ -150,6 +163,7 @@ async fn main() -> std::io::Result<()> {
             .app_data(albums_state.clone())
             .app_data(faces_state_data.clone())
             .app_data(persons_state_data.clone())
+            .app_data(suggestions_state_data.clone())
             .app_data(token_service_data.clone())
             .wrap(Logger::default())
             .wrap(Cors::permissive())
@@ -159,7 +173,8 @@ async fn main() -> std::io::Result<()> {
                     .configure(photos::api::configure_photos)
                     .configure(albums::api::configure_albums)
                     .configure(configure_faces)
-                    .configure(configure_persons),
+                    .configure(configure_persons)
+                    .configure(configure_suggestions),
             )
             .service(
                 SwaggerUi::new("/swagger-ui/{_:.*}")

@@ -173,23 +173,23 @@ Automatically identify known people in new photos with confidence scoring.
 Features
 
 Recognition Engine
-	[ ]	Compare new face embeddings with known persons
-	[ ]	Implement similarity threshold logic
-	[ ]	Assign person_id when confidence is high
+	[x]	Compare new face embeddings with known persons
+	[x]	Implement similarity threshold logic
+	[x]	Assign person_id when confidence is high
 
 Suggestion System
-	[ ]	Store “suggested matches” for medium confidence
-	[ ]	Allow user confirmation/rejection
+	[x]	Store “suggested matches” for medium confidence
+	[x]	Allow user confirmation/rejection
 
 UI — Suggestions
-	[ ]	Create “Suggestions” panel
-	[ ]	Show face + suggested name
-	[ ]	Add Accept / Reject actions
+	[x]	Create “Suggestions” panel
+	[x]	Show face + suggested name
+	[x]	Add Accept / Reject actions
 
 Feedback Loop
-	[ ]	Accept → assign person_id
-	[ ]	Reject → prevent future similar matches
-	[ ]	Store feedback signals
+	[x]	Accept → assign person_id
+	[x]	Reject → prevent future similar matches
+	[x]	Store feedback signals
 
 Validation Steps
 	1.	Upload new image with known person:

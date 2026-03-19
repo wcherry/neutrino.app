@@ -332,12 +332,12 @@ impl PersonsRepository {
     }
 
     /// Atomically replace all persons for a user with the new cluster set.
-    /// Also updates faces.person_id assignments.
+    /// Clusters may carry a preserved name (e.g. when a named person's faces are still in the cluster).
+    /// `clusters` tuples: (person_id, face_ids, cover_face_id, cover_thumbnail, cover_thumbnail_mime_type, name)
     pub fn apply_clusters(
         &self,
         user_id: &str,
-        clusters: &[(String, Vec<String>, Option<String>, Option<String>, Option<String>)],
-        // ^ (person_id, face_ids, cover_face_id, cover_thumbnail, cover_thumbnail_mime_type)
+        clusters: &[(String, Vec<String>, Option<String>, Option<String>, Option<String>, Option<String>)],
         now: NaiveDateTime,
     ) -> Result<(), ApiError> {
         let mut conn = self.get_conn()?;
@@ -356,12 +356,12 @@ impl PersonsRepository {
                     .execute(conn)?;
             }
 
-            // 2. Delete all existing persons for this user.
+            // 2. Delete all existing persons for this user (they are fully replaced by the new cluster set).
             diesel::delete(persons::table.filter(persons::user_id.eq(user_id)))
                 .execute(conn)?;
 
             // 3. Insert new persons and assign face person_ids.
-            for (person_id, face_ids, cover_face_id, cover_thumb, cover_thumb_mime) in clusters {
+            for (person_id, face_ids, cover_face_id, cover_thumb, cover_thumb_mime, name) in clusters {
                 let new_person = NewPersonRecord {
                     id: person_id,
                     user_id,
@@ -369,7 +369,7 @@ impl PersonsRepository {
                     cover_thumbnail: cover_thumb.as_deref(),
                     cover_thumbnail_mime_type: cover_thumb_mime.as_deref(),
                     face_count: face_ids.len() as i32,
-                    name: None,
+                    name: name.as_deref(),
                     created_at: now,
                     updated_at: now,
                 };
@@ -390,5 +390,77 @@ impl PersonsRepository {
             tracing::error!("DB apply clusters error: {:?}", e);
             ApiError::internal("Database error")
         })
+    }
+
+    /// Assign a single face to a person, incrementing the person's face_count.
+    pub fn assign_face_to_person(
+        &self,
+        face_id: &str,
+        person_id: &str,
+        user_id: &str,
+        now: NaiveDateTime,
+    ) -> Result<(), ApiError> {
+        let mut conn = self.get_conn()?;
+        conn.transaction::<(), diesel::result::Error, _>(|conn| {
+            // Verify person belongs to user.
+            let person = persons::table
+                .filter(persons::id.eq(person_id))
+                .filter(persons::user_id.eq(user_id))
+                .select(PersonRecord::as_select())
+                .first(conn)?;
+
+            // Assign face.
+            diesel::update(faces::table.filter(faces::id.eq(face_id)))
+                .set(faces::person_id.eq(person_id))
+                .execute(conn)?;
+
+            // Increment count.
+            diesel::update(
+                persons::table
+                    .filter(persons::id.eq(person_id))
+                    .filter(persons::user_id.eq(user_id)),
+            )
+            .set((
+                persons::face_count.eq(person.face_count + 1),
+                persons::updated_at.eq(now),
+            ))
+            .execute(conn)?;
+
+            Ok(())
+        })
+        .map_err(|e| {
+            tracing::error!("DB assign face to person error: {:?}", e);
+            ApiError::internal("Database error")
+        })
+    }
+
+    /// Return all named persons (name IS NOT NULL) for a user.
+    pub fn list_named_persons_for_user(&self, user_id: &str) -> Result<Vec<PersonRecord>, ApiError> {
+        let mut conn = self.get_conn()?;
+        persons::table
+            .filter(persons::user_id.eq(user_id))
+            .filter(persons::name.is_not_null())
+            .select(PersonRecord::as_select())
+            .load(&mut conn)
+            .map_err(|e| {
+                tracing::error!("DB list named persons error: {:?}", e);
+                ApiError::internal("Database error")
+            })
+    }
+
+    /// Batch-fetch persons by a list of IDs (for suggestion enrichment).
+    pub fn get_persons_by_ids(&self, ids: &[String]) -> Result<Vec<PersonRecord>, ApiError> {
+        if ids.is_empty() {
+            return Ok(vec![]);
+        }
+        let mut conn = self.get_conn()?;
+        persons::table
+            .filter(persons::id.eq_any(ids))
+            .select(PersonRecord::as_select())
+            .load(&mut conn)
+            .map_err(|e| {
+                tracing::error!("DB get persons by ids error: {:?}", e);
+                ApiError::internal("Database error")
+            })
     }
 }

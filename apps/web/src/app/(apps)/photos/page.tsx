@@ -15,11 +15,13 @@ import {
   Info,
   Users,
   ChevronDown,
+  Sparkles,
 } from 'lucide-react';
 import {
   photosApi,
   albumsApi,
   personsApi,
+  suggestionsApi,
   type PhotoResponse,
   type AlbumResponse,
   type PersonResponse,
@@ -27,6 +29,7 @@ import {
 } from '@/lib/api';
 import { PhotoInfoPanel } from './PhotoInfoPanel';
 import { PersonPhotosPanel } from './PersonPhotosPanel';
+import { SuggestionsPanel, SuggestionsBadge } from './SuggestionsPanel';
 import { PreviewModal } from '../drive/PreviewModal';
 import styles from './page.module.css';
 
@@ -203,6 +206,7 @@ export default function PhotosPage() {
   const [previewFile, setPreviewFile] = useState<FileItem | null>(null);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(false);
   const [personFilterIds, setPersonFilterIds] = useState<string[]>([]);
   const [personFilterOpen, setPersonFilterOpen] = useState(false);
   const [personFilterSearch, setPersonFilterSearch] = useState('');
@@ -346,6 +350,16 @@ export default function PhotosPage() {
               Uploading {uploadProgress}%
             </span>
           )}
+          <div style={{ position: 'relative', display: 'inline-flex' }}>
+            <Button
+              variant="secondary"
+              onClick={() => setShowSuggestions((v) => !v)}
+              icon={<Sparkles size={16} />}
+            >
+              Suggestions
+            </Button>
+            <SuggestionsBadge />
+          </div>
           <Button
             variant="secondary"
             onClick={() => setShowUploadModal(true)}
@@ -605,6 +619,10 @@ export default function PhotosPage() {
             queryClient.invalidateQueries({ queryKey: ['persons'] });
           }}
         />
+      )}
+
+      {showSuggestions && (
+        <SuggestionsPanel onClose={() => setShowSuggestions(false)} />
       )}
 
       {previewFile && (

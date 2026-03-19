@@ -1391,6 +1391,41 @@ export const facesApi = {
   },
 };
 
+// ---------------------------------------------------------------------------
+// Suggestions types & API
+// ---------------------------------------------------------------------------
+
+export interface SuggestionResponse {
+  id: string;
+  faceId: string;
+  faceThumbnail: string | null;
+  faceThumbnailMimeType: string | null;
+  personId: string;
+  personName: string | null;
+  personThumbnail: string | null;
+  personThumbnailMimeType: string | null;
+  /** Similarity score 0–1; higher = better match */
+  confidence: number;
+  createdAt: string;
+}
+
+export interface ListSuggestionsResponse {
+  suggestions: SuggestionResponse[];
+  total: number;
+}
+
+export const suggestionsApi = {
+  async listSuggestions(): Promise<ListSuggestionsResponse> {
+    return request<ListSuggestionsResponse>('/api/v1/photos/suggestions');
+  },
+  async acceptSuggestion(id: string): Promise<void> {
+    return request<void>(`/api/v1/photos/suggestions/${id}/accept`, { method: 'POST' });
+  },
+  async rejectSuggestion(id: string): Promise<void> {
+    return request<void>(`/api/v1/photos/suggestions/${id}/reject`, { method: 'POST' });
+  },
+};
+
 export const personsApi = {
   async listPersons(): Promise<ListPersonsResponse> {
     return request<ListPersonsResponse>('/api/v1/photos/persons/list');
