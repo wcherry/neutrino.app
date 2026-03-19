@@ -59,6 +59,29 @@ diesel::table! {
     }
 }
 
+diesel::table! {
+    training_signals (id) {
+        id -> Text,
+        user_id -> Text,
+        face_id -> Text,
+        person_id -> Text,
+        action -> Text,
+        processed -> Bool,
+        created_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    user_recognition_thresholds (user_id) {
+        user_id -> Text,
+        auto_tag_threshold -> Float,
+        suggest_threshold -> Float,
+        total_accepts -> Integer,
+        total_rejects -> Integer,
+        updated_at -> Timestamp,
+    }
+}
+
 diesel::joinable!(faces -> photos (photo_id));
 diesel::joinable!(face_suggestions -> faces (face_id));
 diesel::allow_tables_to_appear_in_same_query!(face_suggestions, faces, photos);

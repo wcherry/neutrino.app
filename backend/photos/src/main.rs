@@ -15,6 +15,7 @@ use utoipa_swagger_ui::SwaggerUi;
 mod albums;
 mod config;
 mod faces;
+mod learning;
 mod persons;
 mod photos;
 mod schema;
@@ -29,6 +30,9 @@ use crate::faces::service::FacesService;
 use crate::persons::api::{PersonsApiState, configure_persons};
 use crate::persons::repository::PersonsRepository;
 use crate::persons::service::PersonsService;
+use crate::learning::api::{LearningApiState, configure_learning};
+use crate::learning::repository::LearningRepository;
+use crate::learning::service::LearningService;
 use crate::suggestions::api::{SuggestionsApiState, configure_suggestions};
 use crate::suggestions::repository::SuggestionsRepository;
 use crate::suggestions::service::SuggestionsService;
@@ -119,6 +123,7 @@ async fn main() -> std::io::Result<()> {
     let faces_repo = Arc::new(FacesRepository::new(pool.clone()));
     let persons_repo = Arc::new(PersonsRepository::new(pool.clone()));
     let suggestions_repo = Arc::new(SuggestionsRepository::new(pool.clone()));
+    let learning_repo = Arc::new(LearningRepository::new(pool.clone()));
 
     let photos_service = Arc::new(PhotosService::new(
         photos_repo.clone(),
@@ -132,7 +137,13 @@ async fn main() -> std::io::Result<()> {
     let suggestions_service = Arc::new(SuggestionsService::new(
         suggestions_repo,
         faces_repo,
+        persons_repo.clone(),
+        learning_repo.clone(),
+    ));
+    let learning_service = Arc::new(LearningService::new(
+        learning_repo,
         persons_repo,
+        suggestions_service.repo.clone(),
     ));
 
     let photos_state = web::Data::new(PhotosApiState { photos_service: photos_service.clone() });
@@ -143,6 +154,24 @@ async fn main() -> std::io::Result<()> {
         photos_service,
     });
     let suggestions_state = web::Data::new(SuggestionsApiState { suggestions_service });
+    let learning_state = web::Data::new(LearningApiState { learning_service: learning_service.clone() });
+
+    // Background learning loop: periodically process feedback signals and re-evaluate faces.
+    let learning_service_bg = learning_service.clone();
+    tokio::spawn(async move {
+        let interval_secs = std::env::var("REPROCESS_INTERVAL_SECS")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(1800u64);
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(interval_secs));
+        interval.tick().await; // skip first immediate tick at startup
+        loop {
+            interval.tick().await;
+            if let Err(e) = learning_service_bg.process_all_pending() {
+                tracing::error!("Background learning reprocessing error: {:?}", e);
+            }
+        }
+    });
 
     let token_service_data = web::Data::new(token_service.clone());
     let pool_data = web::Data::new(pool.clone());
@@ -164,6 +193,7 @@ async fn main() -> std::io::Result<()> {
             .app_data(faces_state_data.clone())
             .app_data(persons_state_data.clone())
             .app_data(suggestions_state_data.clone())
+            .app_data(learning_state.clone())
             .app_data(token_service_data.clone())
             .wrap(Logger::default())
             .wrap(Cors::permissive())
@@ -174,7 +204,8 @@ async fn main() -> std::io::Result<()> {
                     .configure(albums::api::configure_albums)
                     .configure(configure_faces)
                     .configure(configure_persons)
-                    .configure(configure_suggestions),
+                    .configure(configure_suggestions)
+                    .configure(configure_learning),
             )
             .service(
                 SwaggerUi::new("/swagger-ui/{_:.*}")

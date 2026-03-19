@@ -448,6 +448,44 @@ impl PersonsRepository {
             })
     }
 
+    /// Return faces that have an embedding but are not yet assigned to any person.
+    pub fn list_unassigned_faces_with_embeddings(
+        &self,
+        user_id: &str,
+    ) -> Result<Vec<FaceRecord>, ApiError> {
+        use crate::schema::photos;
+        let mut conn = self.get_conn()?;
+        faces::table
+            .inner_join(photos::table.on(faces::photo_id.eq(photos::id)))
+            .filter(photos::user_id.eq(user_id))
+            .filter(faces::embedding.is_not_null())
+            .filter(faces::person_id.is_null())
+            .select(FaceRecord::as_select())
+            .load(&mut conn)
+            .map_err(|e| {
+                tracing::error!("DB list unassigned faces error: {:?}", e);
+                ApiError::internal("Database error")
+            })
+    }
+
+    /// Return the user_id of the photo that contains a given face (for ownership checks).
+    pub fn get_photo_user_id_for_face(&self, face_id: &str) -> Result<String, ApiError> {
+        use crate::schema::photos;
+        let mut conn = self.get_conn()?;
+        faces::table
+            .inner_join(photos::table.on(faces::photo_id.eq(photos::id)))
+            .filter(faces::id.eq(face_id))
+            .select(photos::user_id)
+            .first::<String>(&mut conn)
+            .map_err(|e| match e {
+                diesel::result::Error::NotFound => ApiError::not_found("Face not found"),
+                _ => {
+                    tracing::error!("DB get photo user_id for face error: {:?}", e);
+                    ApiError::internal("Database error")
+                }
+            })
+    }
+
     /// Batch-fetch persons by a list of IDs (for suggestion enrichment).
     pub fn get_persons_by_ids(&self, ids: &[String]) -> Result<Vec<PersonRecord>, ApiError> {
         if ids.is_empty() {

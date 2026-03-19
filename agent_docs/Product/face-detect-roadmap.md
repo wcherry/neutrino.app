@@ -213,17 +213,17 @@ Continuously improve recognition accuracy using user feedback.
 Features
 
 Feedback Processing
-	[ ]	Capture accept/reject actions
-	[ ]	Store training signals
+	[x]	Capture accept/reject actions
+	[x]	Store training signals
 
 Model Refinement
-	[ ]	Periodically retrain or adjust thresholds
-	[ ]	Re-run clustering with improved embeddings
-	[ ]	Re-evaluate previously unassigned faces
+	[x]	Periodically retrain or adjust thresholds
+	[x]	Re-run clustering with improved embeddings
+	[x]	Re-evaluate previously unassigned faces
 
 Background Jobs
-	[ ]	Schedule reprocessing jobs
-	[ ]	Optimize embedding comparisons
+	[x]	Schedule reprocessing jobs
+	[x]	Optimize embedding comparisons
 
 Validation Steps
 	1.	Perform multiple accept/reject actions

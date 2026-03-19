@@ -1,4 +1,5 @@
 use crate::faces::repository::FacesRepository;
+use crate::learning::repository::LearningRepository;
 use crate::persons::repository::PersonsRepository;
 use crate::suggestions::{
     dto::{ListSuggestionsResponse, SuggestionResponse},
@@ -7,11 +8,13 @@ use crate::suggestions::{
 use shared::auth::AuthenticatedUser;
 use shared::ApiError;
 use std::sync::Arc;
+use uuid::Uuid;
 
 pub struct SuggestionsService {
     pub repo: Arc<SuggestionsRepository>,
     pub faces_repo: Arc<FacesRepository>,
     pub persons_repo: Arc<PersonsRepository>,
+    pub learning_repo: Arc<LearningRepository>,
 }
 
 impl SuggestionsService {
@@ -19,8 +22,9 @@ impl SuggestionsService {
         repo: Arc<SuggestionsRepository>,
         faces_repo: Arc<FacesRepository>,
         persons_repo: Arc<PersonsRepository>,
+        learning_repo: Arc<LearningRepository>,
     ) -> Self {
-        SuggestionsService { repo, faces_repo, persons_repo }
+        SuggestionsService { repo, faces_repo, persons_repo, learning_repo }
     }
 
     pub fn list_suggestions(
@@ -100,6 +104,17 @@ impl SuggestionsService {
         // Clear other pending suggestions for this face (it's now assigned).
         self.repo.delete_pending_for_face(&suggestion.face_id)?;
 
+        // Record training signal.
+        let signal_id = Uuid::new_v4().to_string();
+        let _ = self.learning_repo.insert_signal(
+            &signal_id,
+            &user.user_id,
+            &suggestion.face_id,
+            &suggestion.person_id,
+            "accepted",
+            now,
+        );
+
         Ok(())
     }
 
@@ -116,6 +131,18 @@ impl SuggestionsService {
 
         let now = chrono::Utc::now().naive_utc();
         self.repo.update_status(suggestion_id, "rejected", now)?;
+
+        // Record training signal.
+        let signal_id = Uuid::new_v4().to_string();
+        let _ = self.learning_repo.insert_signal(
+            &signal_id,
+            &user.user_id,
+            &suggestion.face_id,
+            &suggestion.person_id,
+            "rejected",
+            now,
+        );
+
         Ok(())
     }
 
