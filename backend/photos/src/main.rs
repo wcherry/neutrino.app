@@ -132,6 +132,7 @@ async fn main() -> std::io::Result<()> {
         config.worker_secret.clone(),
     ));
     let albums_service = Arc::new(AlbumsService::new(albums_repo, photos_repo.clone()));
+
     let faces_service = Arc::new(FacesService::new(faces_repo.clone(), photos_repo));
     let persons_service = Arc::new(PersonsService::new(persons_repo.clone(), suggestions_repo.clone()));
     let suggestions_service = Arc::new(SuggestionsService::new(
@@ -147,11 +148,12 @@ async fn main() -> std::io::Result<()> {
     ));
 
     let photos_state = web::Data::new(PhotosApiState { photos_service: photos_service.clone() });
-    let albums_state = web::Data::new(AlbumsApiState { albums_service });
+    let albums_state = web::Data::new(AlbumsApiState { albums_service: albums_service.clone() });
     let faces_state = web::Data::new(FacesApiState { faces_service });
     let persons_state = web::Data::new(PersonsApiState {
         persons_service,
         photos_service,
+        albums_service,
     });
     let suggestions_state = web::Data::new(SuggestionsApiState { suggestions_service });
     let learning_state = web::Data::new(LearningApiState { learning_service: learning_service.clone() });

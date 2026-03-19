@@ -243,20 +243,20 @@ Deliver a fully intelligent, user-friendly photo discovery system.
 Features
 
 Advanced Queries
-	[ ]	Multi-person inclusion/exclusion filters
-	[ ]	Query: “Person A but not Person B”
+	[x]	Multi-person inclusion/exclusion filters
+	[x]	Query: “Person A but not Person B”
 
 Timeline View
-	[ ]	Show chronological appearances of a person
-	[ ]	Group by date/events
+	[x]	Show chronological appearances of a person
+	[x]	Group by date/events
 
 Smart Albums
-	[ ]	Auto-generate albums per person
-	[ ]	Add filters (date, location if available)
+	[x]	Auto-generate albums per person
+	[x]	Add filters (date, location if available)
 
 Relationship Insights (Optional)
-	[ ]	Detect frequently co-occurring people
-	[ ]	Display associations
+	[x]	Detect frequently co-occurring people
+	[x]	Display associations
 
 Validation Steps
 	1.	Run complex queries:

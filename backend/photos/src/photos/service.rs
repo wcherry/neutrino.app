@@ -134,24 +134,52 @@ impl PhotosService {
         &self,
         user: &AuthenticatedUser,
         person_ids: &[String],
+        exclude_person_ids: &[String],
     ) -> Result<ListPhotosResponse, ApiError> {
-        if person_ids.is_empty() {
+        if person_ids.is_empty() && exclude_person_ids.is_empty() {
             return self.list_photos(user, false, false).await;
         }
 
-        // Compute the intersection: photos containing faces from ALL selected persons.
-        let mut sets: Vec<std::collections::HashSet<String>> = Vec::with_capacity(person_ids.len());
-        for pid in person_ids {
-            let ids = self.repo.get_photo_ids_for_person(&user.user_id, pid)?;
-            sets.push(ids.into_iter().collect());
-        }
-        let intersection: Vec<String> = sets[0]
-            .iter()
-            .filter(|id| sets[1..].iter().all(|s| s.contains(*id)))
-            .cloned()
+        // Compute the inclusion intersection: photos containing faces from ALL included persons.
+        let included: std::collections::HashSet<String> = if person_ids.is_empty() {
+            // No inclusion filter — start with all photos for this user.
+            self.repo
+                .list_photos(&user.user_id, false, false)?
+                .into_iter()
+                .map(|p| p.id)
+                .collect()
+        } else {
+            let mut sets: Vec<std::collections::HashSet<String>> =
+                Vec::with_capacity(person_ids.len());
+            for pid in person_ids {
+                let ids = self.repo.get_photo_ids_for_person(&user.user_id, pid)?;
+                sets.push(ids.into_iter().collect());
+            }
+            sets[0]
+                .iter()
+                .filter(|id| sets[1..].iter().all(|s| s.contains(*id)))
+                .cloned()
+                .collect()
+        };
+
+        // Compute exclusion: remove photos that contain any excluded person.
+        let excluded: std::collections::HashSet<String> = if exclude_person_ids.is_empty() {
+            std::collections::HashSet::new()
+        } else {
+            let mut excluded_set = std::collections::HashSet::new();
+            for pid in exclude_person_ids {
+                let ids = self.repo.get_photo_ids_for_person(&user.user_id, pid)?;
+                excluded_set.extend(ids);
+            }
+            excluded_set
+        };
+
+        let result_ids: Vec<String> = included
+            .into_iter()
+            .filter(|id| !excluded.contains(id))
             .collect();
 
-        self.list_photos_by_ids(user, &intersection).await
+        self.list_photos_by_ids(user, &result_ids).await
     }
 
     pub async fn list_photos(

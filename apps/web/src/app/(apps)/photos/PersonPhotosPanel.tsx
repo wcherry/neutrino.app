@@ -2,8 +2,9 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { X, Users, Image as ImageIcon, Pencil, Check, GitMerge, Trash2 } from 'lucide-react';
+import { X, Users, Image as ImageIcon, Pencil, Check, GitMerge, Trash2, Clock, FolderPlus, Link } from 'lucide-react';
 import { personsApi, type PersonResponse } from '@/lib/api';
+import { PersonTimelinePanel } from './PersonTimelinePanel';
 import styles from './PersonPhotosPanel.module.css';
 
 interface Props {
@@ -14,8 +15,11 @@ interface Props {
   onPersonDeleted: () => void;
 }
 
+type ActiveTab = 'photos' | 'timeline';
+
 export function PersonPhotosPanel({ person, allPersons, onClose, onPersonUpdated, onPersonDeleted }: Props) {
   const queryClient = useQueryClient();
+  const [activeTab, setActiveTab] = useState<ActiveTab>('photos');
 
   // ── Rename state ──────────────────────────────────────────────────────────
   const [isRenaming, setIsRenaming] = useState(false);
@@ -64,7 +68,6 @@ export function PersonPhotosPanel({ person, allPersons, onClose, onPersonUpdated
   const removeFaceMutation = useMutation({
     mutationFn: (faceId: string) => personsApi.removeFace(person.id, faceId),
     onSuccess: () => {
-      // If last face removed, the person is deleted on the backend.
       if (person.faceCount <= 1) {
         onPersonDeleted();
       } else {
@@ -79,6 +82,14 @@ export function PersonPhotosPanel({ person, allPersons, onClose, onPersonUpdated
     },
   });
 
+  // ── Smart Album ───────────────────────────────────────────────────────────
+  const smartAlbumMutation = useMutation({
+    mutationFn: () => personsApi.createSmartAlbum(person.id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['albums'] });
+    },
+  });
+
   // ── Photos query ──────────────────────────────────────────────────────────
   const { data, isLoading } = useQuery({
     queryKey: ['personPhotos', person.id],
@@ -86,12 +97,28 @@ export function PersonPhotosPanel({ person, allPersons, onClose, onPersonUpdated
     staleTime: 60_000,
   });
 
-  const photos = data?.photos ?? [];
+  // ── Relationships query ───────────────────────────────────────────────────
+  const { data: relData } = useQuery({
+    queryKey: ['personRelationships'],
+    queryFn: () => personsApi.getRelationships(),
+    staleTime: 5 * 60_000,
+  });
 
+  const photos = data?.photos ?? [];
   const avatarSrc =
     person.coverThumbnail && person.coverThumbnailMimeType
       ? `data:${person.coverThumbnailMimeType};base64,${person.coverThumbnail}`
       : null;
+
+  // Filter relationships involving this person.
+  const coPersonIds = new Set(allPersons.map((p) => p.id));
+  const relationships = (relData?.relationships ?? []).filter(
+    (r) =>
+      (r.personAId === person.id || r.personBId === person.id) &&
+      r.photoCount >= 2 &&
+      coPersonIds.has(r.personAId) &&
+      coPersonIds.has(r.personBId)
+  ).slice(0, 5);
 
   return (
     <div className={styles.panel}>
@@ -151,6 +178,16 @@ export function PersonPhotosPanel({ person, allPersons, onClose, onPersonUpdated
           </div>
         </div>
         <div className={styles.headerActions}>
+          {person.name && (
+            <button
+              className={styles.iconAction}
+              onClick={() => smartAlbumMutation.mutate()}
+              disabled={smartAlbumMutation.isPending}
+              title="Create / refresh smart album for this person"
+            >
+              <FolderPlus size={14} />
+            </button>
+          )}
           {mergeTargets.length > 0 && (
             <div className={styles.mergeWrapper}>
               <button
@@ -218,9 +255,57 @@ export function PersonPhotosPanel({ person, allPersons, onClose, onPersonUpdated
         </div>
       )}
 
-      {/* Photos grid */}
+      {/* Relationships */}
+      {relationships.length > 0 && (
+        <div className={styles.facesSection}>
+          <p className={styles.sectionLabel}><Link size={10} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4 }} />Often seen with</p>
+          <div className={styles.relationshipsRow}>
+            {relationships.map((r) => {
+              const otherId = r.personAId === person.id ? r.personBId : r.personAId;
+              const otherThumb = r.personAId === person.id ? r.personBThumbnail : r.personAThumbnail;
+              const otherMime = r.personAId === person.id ? r.personBThumbnailMimeType : r.personAThumbnailMimeType;
+              const otherName = r.personAId === person.id ? r.personBName : r.personAName;
+              const src = otherThumb && otherMime ? `data:${otherMime};base64,${otherThumb}` : null;
+              const otherPerson = allPersons.find((p) => p.id === otherId);
+              return (
+                <div key={otherId} className={styles.relationshipChip} title={`${r.photoCount} shared photos`}>
+                  {src ? (
+                    <img src={src} alt="" className={styles.relationshipAvatar} />
+                  ) : (
+                    <div className={styles.relationshipAvatarPlaceholder}><Users size={10} /></div>
+                  )}
+                  <span className={styles.relationshipName}>{otherName ?? otherPerson?.name ?? 'Unknown'}</span>
+                  <span className={styles.relationshipCount}>{r.photoCount}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Tab bar */}
+      <div className={styles.tabBar}>
+        <button
+          className={`${styles.tab} ${activeTab === 'photos' ? styles.tabActive : ''}`}
+          onClick={() => setActiveTab('photos')}
+        >
+          <ImageIcon size={13} />
+          Photos
+        </button>
+        <button
+          className={`${styles.tab} ${activeTab === 'timeline' ? styles.tabActive : ''}`}
+          onClick={() => setActiveTab('timeline')}
+        >
+          <Clock size={13} />
+          Timeline
+        </button>
+      </div>
+
+      {/* Body */}
       <div className={styles.body}>
-        {isLoading ? (
+        {activeTab === 'timeline' ? (
+          <PersonTimelinePanel person={person} />
+        ) : isLoading ? (
           <p className={styles.hint}>Loading photos…</p>
         ) : photos.length === 0 ? (
           <p className={styles.hint}>No photos found</p>

@@ -21,6 +21,8 @@ diesel::table! {
         user_id -> Text,
         title -> Text,
         description -> Nullable<Text>,
+        is_auto -> Bool,
+        person_id -> Nullable<Text>,
         created_at -> Timestamp,
         updated_at -> Timestamp,
     }

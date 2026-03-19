@@ -10,6 +10,8 @@ pub struct AlbumRecord {
     pub user_id: String,
     pub title: String,
     pub description: Option<String>,
+    pub is_auto: bool,
+    pub person_id: Option<String>,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
 }
@@ -21,6 +23,8 @@ pub struct NewAlbumRecord<'a> {
     pub user_id: &'a str,
     pub title: &'a str,
     pub description: Option<&'a str>,
+    pub is_auto: bool,
+    pub person_id: Option<&'a str>,
 }
 
 #[derive(Debug, AsChangeset, Default)]

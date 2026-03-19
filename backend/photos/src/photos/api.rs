@@ -21,6 +21,7 @@ pub struct PhotosApiState {
         ("archivedOnly" = Option<bool>, Query, description = "Include archived photos"),
         ("starredOnly" = Option<bool>, Query, description = "Show only starred photos"),
         ("personIds" = Option<String>, Query, description = "Comma-separated person IDs to filter by (AND logic)"),
+        ("excludePersonIds" = Option<String>, Query, description = "Comma-separated person IDs to exclude"),
     ),
     responses(
         (status = 200, description = "List of photos", body = ListPhotosResponse),
@@ -34,20 +35,25 @@ pub async fn list_photos(
     user: AuthenticatedUser,
     query: web::Query<std::collections::HashMap<String, String>>,
 ) -> Result<web::Json<ListPhotosResponse>, ApiError> {
-    let person_ids: Vec<String> = query
-        .get("personIds")
-        .map(|v| {
-            v.split(',')
-                .map(|s| s.trim().to_string())
-                .filter(|s| !s.is_empty())
-                .collect()
-        })
-        .unwrap_or_default();
+    let parse_ids = |key: &str| -> Vec<String> {
+        query
+            .get(key)
+            .map(|v| {
+                v.split(',')
+                    .map(|s| s.trim().to_string())
+                    .filter(|s| !s.is_empty())
+                    .collect()
+            })
+            .unwrap_or_default()
+    };
 
-    let result = if !person_ids.is_empty() {
+    let person_ids = parse_ids("personIds");
+    let exclude_person_ids = parse_ids("excludePersonIds");
+
+    let result = if !person_ids.is_empty() || !exclude_person_ids.is_empty() {
         state
             .photos_service
-            .list_photos_by_person_filter(&user, &person_ids)
+            .list_photos_by_person_filter(&user, &person_ids, &exclude_person_ids)
             .await?
     } else {
         let include_archived = query

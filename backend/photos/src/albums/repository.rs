@@ -151,6 +151,54 @@ impl AlbumsRepository {
             })
     }
 
+    /// Find the auto-generated album for a specific person (if one exists).
+    pub fn find_auto_album_for_person(
+        &self,
+        user_id: &str,
+        person_id: &str,
+    ) -> Result<Option<AlbumRecord>, ApiError> {
+        let mut conn = self.get_conn()?;
+        let result = albums::table
+            .filter(albums::user_id.eq(user_id))
+            .filter(albums::person_id.eq(person_id))
+            .filter(albums::is_auto.eq(true))
+            .select(AlbumRecord::as_select())
+            .first(&mut conn)
+            .optional()
+            .map_err(|e| {
+                tracing::error!("DB find auto album error: {:?}", e);
+                ApiError::internal("Database error")
+            })?;
+        Ok(result)
+    }
+
+    /// Replace all photos in an album with the given set of photo IDs.
+    /// Photos not in the set are removed; new ones are added.
+    pub fn sync_album_photos(
+        &self,
+        album_id: &str,
+        photo_ids: &[String],
+    ) -> Result<(), ApiError> {
+        let mut conn = self.get_conn()?;
+        conn.transaction::<(), diesel::result::Error, _>(|conn| {
+            // Remove all existing entries.
+            diesel::delete(album_photos::table.filter(album_photos::album_id.eq(album_id)))
+                .execute(conn)?;
+            // Insert the new set.
+            for photo_id in photo_ids {
+                let new_item = NewAlbumPhotoRecord { album_id, photo_id };
+                diesel::insert_or_ignore_into(album_photos::table)
+                    .values(&new_item)
+                    .execute(conn)?;
+            }
+            Ok(())
+        })
+        .map_err(|e| {
+            tracing::error!("DB sync album photos error: {:?}", e);
+            ApiError::internal("Database error")
+        })
+    }
+
     pub fn count_album_photos(&self, album_id: &str) -> Result<usize, ApiError> {
         let mut conn = self.get_conn()?;
         let count: i64 = album_photos::table

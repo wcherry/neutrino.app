@@ -16,12 +16,12 @@ import {
   Users,
   ChevronDown,
   Sparkles,
+  Wand2,
 } from 'lucide-react';
 import {
   photosApi,
   albumsApi,
   personsApi,
-  suggestionsApi,
   type PhotoResponse,
   type AlbumResponse,
   type PersonResponse,
@@ -154,10 +154,17 @@ function AlbumCard({ album }: { album: AlbumResponse }) {
   return (
     <div className={styles.albumCard}>
       <div className={styles.albumCover}>
-        <FolderOpen size={40} />
+        {album.isAuto ? <Wand2 size={40} /> : <FolderOpen size={40} />}
       </div>
       <div className={styles.albumInfo}>
-        <p className={styles.albumTitle}>{album.title}</p>
+        <p className={styles.albumTitle}>
+          {album.title}
+          {album.isAuto && (
+            <span style={{ marginLeft: 6, fontSize: 'var(--font-size-xs)', fontWeight: 400, color: 'var(--color-text-secondary)', background: 'var(--color-surface-raised, #f3f4f6)', borderRadius: 4, padding: '1px 5px' }}>
+              Smart
+            </span>
+          )}
+        </p>
         <p className={styles.albumCount}>{album.photoCount} {album.photoCount === 1 ? 'photo' : 'photos'}</p>
       </div>
     </div>
@@ -207,7 +214,8 @@ export default function PhotosPage() {
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
-  const [personFilterIds, setPersonFilterIds] = useState<string[]>([]);
+  const [includePersonIds, setIncludePersonIds] = useState<string[]>([]);
+  const [excludePersonIds, setExcludePersonIds] = useState<string[]>([]);
   const [personFilterOpen, setPersonFilterOpen] = useState(false);
   const [personFilterSearch, setPersonFilterSearch] = useState('');
   const personFilterRef = useRef<HTMLDivElement>(null);
@@ -227,11 +235,12 @@ export default function PhotosPage() {
   }
 
   const photosQuery = useQuery({
-    queryKey: ['photos', activeTab, personFilterIds],
+    queryKey: ['photos', activeTab, includePersonIds, excludePersonIds],
     queryFn: () => {
       if (activeTab === 'favorites') return photosApi.listPhotos({ starredOnly: true });
       if (activeTab === 'archive') return photosApi.listPhotos({ archivedOnly: true });
-      if (personFilterIds.length > 0) return photosApi.listPhotos({ personIds: personFilterIds });
+      if (includePersonIds.length > 0 || excludePersonIds.length > 0)
+        return photosApi.listPhotos({ personIds: includePersonIds, excludePersonIds });
       return photosApi.listPhotos();
     },
     enabled: activeTab !== 'albums' && activeTab !== 'people',
@@ -323,10 +332,11 @@ export default function PhotosPage() {
     (activeTab === 'albums' ? albumsQuery.isLoading : false) ||
     (['all', 'favorites', 'archive'].includes(activeTab) ? photosQuery.isLoading : false);
 
+  const activeFilterPersonIds = [...includePersonIds, ...excludePersonIds];
   const filteredPersonSuggestions = persons.filter((p) => {
     const name = p.name ?? 'Unknown person';
     return (
-      !personFilterIds.includes(p.id) &&
+      !activeFilterPersonIds.includes(p.id) &&
       name.toLowerCase().includes(personFilterSearch.toLowerCase())
     );
   });
@@ -388,7 +398,8 @@ export default function PhotosPage() {
             onClick={() => {
               setActiveTab(tab);
               if (tab !== 'all') {
-                setPersonFilterIds([]);
+                setIncludePersonIds([]);
+                setExcludePersonIds([]);
                 setPersonFilterOpen(false);
               }
             }}
@@ -405,31 +416,46 @@ export default function PhotosPage() {
       {activeTab === 'all' && persons.length > 0 && (
         <div className={styles.filterBar}>
           <div className={styles.filterBarLeft}>
-            {personFilterIds.length > 0 && (
-              <>
-                {personFilterIds.map((pid) => {
-                  const p = persons.find((p) => p.id === pid);
-                  return (
-                    <span key={pid} className={styles.filterChip}>
-                      <Users size={12} />
-                      {p?.name ?? 'Unknown person'}
-                      <button
-                        className={styles.filterChipRemove}
-                        onClick={() => setPersonFilterIds((ids) => ids.filter((id) => id !== pid))}
-                        aria-label="Remove filter"
-                      >
-                        <X size={11} />
-                      </button>
-                    </span>
-                  );
-                })}
-                <button
-                  className={styles.clearFiltersBtn}
-                  onClick={() => setPersonFilterIds([])}
-                >
-                  Clear
-                </button>
-              </>
+            {includePersonIds.map((pid) => {
+              const p = persons.find((p) => p.id === pid);
+              return (
+                <span key={pid} className={styles.filterChip}>
+                  <Users size={12} />
+                  {p?.name ?? 'Unknown person'}
+                  <button
+                    className={styles.filterChipRemove}
+                    onClick={() => setIncludePersonIds((ids) => ids.filter((id) => id !== pid))}
+                    aria-label="Remove filter"
+                    title="Remove"
+                  >
+                    <X size={11} />
+                  </button>
+                </span>
+              );
+            })}
+            {excludePersonIds.map((pid) => {
+              const p = persons.find((p) => p.id === pid);
+              return (
+                <span key={pid} className={styles.filterChip} style={{ opacity: 0.65, textDecoration: 'line-through' }} title="Excluding this person">
+                  <Users size={12} />
+                  {p?.name ?? 'Unknown person'}
+                  <button
+                    className={styles.filterChipRemove}
+                    onClick={() => setExcludePersonIds((ids) => ids.filter((id) => id !== pid))}
+                    aria-label="Remove exclusion filter"
+                  >
+                    <X size={11} />
+                  </button>
+                </span>
+              );
+            })}
+            {(includePersonIds.length > 0 || excludePersonIds.length > 0) && (
+              <button
+                className={styles.clearFiltersBtn}
+                onClick={() => { setIncludePersonIds([]); setExcludePersonIds([]); }}
+              >
+                Clear
+              </button>
             )}
           </div>
 
@@ -465,24 +491,37 @@ export default function PhotosPage() {
                           ? `data:${p.coverThumbnailMimeType};base64,${p.coverThumbnail}`
                           : null;
                       return (
-                        <button
-                          key={p.id}
-                          className={styles.filterDropdownItem}
-                          onClick={() => {
-                            setPersonFilterIds((ids) => [...ids, p.id]);
-                            setPersonFilterOpen(false);
-                            setPersonFilterSearch('');
-                          }}
-                        >
-                          {src ? (
-                            <img src={src} alt="" className={styles.filterDropdownAvatar} />
-                          ) : (
-                            <div className={styles.filterDropdownAvatarPlaceholder}>
-                              <Users size={12} />
-                            </div>
-                          )}
-                          <span>{p.name ?? 'Unknown person'}</span>
-                        </button>
+                        <div key={p.id} style={{ display: 'flex', gap: 0 }}>
+                          <button
+                            className={styles.filterDropdownItem}
+                            style={{ flex: 1 }}
+                            onClick={() => {
+                              setIncludePersonIds((ids) => [...ids, p.id]);
+                              setPersonFilterOpen(false);
+                              setPersonFilterSearch('');
+                            }}
+                          >
+                            {src ? (
+                              <img src={src} alt="" className={styles.filterDropdownAvatar} />
+                            ) : (
+                              <div className={styles.filterDropdownAvatarPlaceholder}>
+                                <Users size={12} />
+                              </div>
+                            )}
+                            <span>{p.name ?? 'Unknown person'}</span>
+                          </button>
+                          <button
+                            title="Exclude this person"
+                            style={{ padding: '0 var(--space-2)', border: 'none', background: 'none', cursor: 'pointer', color: 'var(--color-text-secondary)', fontSize: 'var(--font-size-xs)' }}
+                            onClick={() => {
+                              setExcludePersonIds((ids) => [...ids, p.id]);
+                              setPersonFilterOpen(false);
+                              setPersonFilterSearch('');
+                            }}
+                          >
+                            not
+                          </button>
+                        </div>
                       );
                     })
                   )}

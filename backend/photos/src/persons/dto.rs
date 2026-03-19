@@ -1,3 +1,4 @@
+use crate::photos::dto::PhotoResponse;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize)]
@@ -92,4 +93,46 @@ pub struct ClusterEntry {
 pub struct SaveClustersRequest {
     pub user_id: String,
     pub clusters: Vec<ClusterEntry>,
+}
+
+// ── Phase 7: Timeline ───────────────────────────────────────────────────────
+
+/// A chronological group of photos for a person, bucketed by year-month.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TimelineGroup {
+    /// Human-readable label, e.g. "March 2025".
+    pub label: String,
+    /// ISO year-month key, e.g. "2025-03".
+    pub month: String,
+    pub photos: Vec<PhotoResponse>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PersonTimelineResponse {
+    pub groups: Vec<TimelineGroup>,
+}
+
+// ── Phase 7: Relationship Insights ─────────────────────────────────────────
+
+/// Two persons that frequently appear together in photos.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PersonRelationship {
+    pub person_a_id: String,
+    pub person_a_name: Option<String>,
+    pub person_a_thumbnail: Option<String>,
+    pub person_a_thumbnail_mime_type: Option<String>,
+    pub person_b_id: String,
+    pub person_b_name: Option<String>,
+    pub person_b_thumbnail: Option<String>,
+    pub person_b_thumbnail_mime_type: Option<String>,
+    pub photo_count: usize,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PersonRelationshipsResponse {
+    pub relationships: Vec<PersonRelationship>,
 }

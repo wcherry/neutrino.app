@@ -486,6 +486,69 @@ impl PersonsRepository {
             })
     }
 
+    /// Return photo_ids for a person with their date information for timeline grouping.
+    /// Returns (photo_id, capture_date_or_created_at) sorted chronologically.
+    pub fn list_photo_ids_for_person_with_dates(
+        &self,
+        user_id: &str,
+        person_id: &str,
+    ) -> Result<Vec<(String, chrono::NaiveDateTime)>, ApiError> {
+        use crate::schema::photos;
+        let mut conn = self.get_conn()?;
+        // Join faces → photos, get photo_id + date, deduplicate by photo_id.
+        let rows: Vec<(String, Option<chrono::NaiveDateTime>, chrono::NaiveDateTime)> =
+            faces::table
+                .inner_join(photos::table.on(faces::photo_id.eq(photos::id)))
+                .filter(photos::user_id.eq(user_id))
+                .filter(photos::deleted_at.is_null())
+                .filter(photos::is_archived.eq(false))
+                .filter(faces::person_id.eq(person_id))
+                .select((photos::id, photos::capture_date, photos::created_at))
+                .distinct()
+                .load::<(String, Option<chrono::NaiveDateTime>, chrono::NaiveDateTime)>(&mut conn)
+                .map_err(|e| {
+                    tracing::error!("DB list photo ids for person with dates error: {:?}", e);
+                    ApiError::internal("Database error")
+                })?;
+
+        let mut result: Vec<(String, chrono::NaiveDateTime)> = rows
+            .into_iter()
+            .map(|(id, capture_date, created_at)| {
+                let date = capture_date.unwrap_or(created_at);
+                (id, date)
+            })
+            .collect();
+        result.sort_by_key(|(_, d)| *d);
+        Ok(result)
+    }
+
+    /// Find all photos containing multiple persons (for co-occurrence detection).
+    /// Returns (photo_id, person_id) pairs.
+    pub fn list_person_photo_pairs_for_user(
+        &self,
+        user_id: &str,
+    ) -> Result<Vec<(String, String)>, ApiError> {
+        use crate::schema::photos;
+        let mut conn = self.get_conn()?;
+        faces::table
+            .inner_join(photos::table.on(faces::photo_id.eq(photos::id)))
+            .filter(photos::user_id.eq(user_id))
+            .filter(photos::deleted_at.is_null())
+            .filter(faces::person_id.is_not_null())
+            .select((photos::id, faces::person_id))
+            .distinct()
+            .load::<(String, Option<String>)>(&mut conn)
+            .map(|rows| {
+                rows.into_iter()
+                    .filter_map(|(photo_id, person_id)| person_id.map(|pid| (photo_id, pid)))
+                    .collect()
+            })
+            .map_err(|e| {
+                tracing::error!("DB list person photo pairs error: {:?}", e);
+                ApiError::internal("Database error")
+            })
+    }
+
     /// Batch-fetch persons by a list of IDs (for suggestion enrichment).
     pub fn get_persons_by_ids(&self, ids: &[String]) -> Result<Vec<PersonRecord>, ApiError> {
         if ids.is_empty() {

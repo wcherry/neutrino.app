@@ -1,12 +1,14 @@
 use crate::persons::{
     dto::{
         ClusterEntry, FaceEmbeddingEntry, FaceEmbeddingsResponse, ListPersonsResponse,
-        MergePersonsRequest, PersonFaceThumbnail, PersonResponse, ReassignFaceRequest,
-        RenamePersonRequest, SaveClustersRequest, UsersWithFacesResponse,
+        MergePersonsRequest, PersonFaceThumbnail, PersonRelationship, PersonRelationshipsResponse,
+        PersonResponse, PersonTimelineResponse, ReassignFaceRequest, RenamePersonRequest,
+        SaveClustersRequest, TimelineGroup, UsersWithFacesResponse,
     },
     repository::PersonsRepository,
 };
 use crate::suggestions::repository::SuggestionsRepository;
+use chrono::Datelike;
 use shared::ApiError;
 use std::sync::Arc;
 use uuid::Uuid;
@@ -349,6 +351,29 @@ impl PersonsService {
         Ok(())
     }
 
+    /// Return a person record, verifying it belongs to the user.
+    pub fn get_person_for_user(
+        &self,
+        person_id: &str,
+        user_id: &str,
+    ) -> Result<PersonResponse, ApiError> {
+        let person = self.repo.get_person(person_id)?;
+        if person.user_id != user_id {
+            return Err(ApiError::new(403, "FORBIDDEN", "Access denied"));
+        }
+        let faces = self
+            .repo
+            .list_faces_for_person(person_id)?
+            .into_iter()
+            .map(|f| PersonFaceThumbnail {
+                id: f.id,
+                thumbnail: f.thumbnail,
+                thumbnail_mime_type: f.thumbnail_mime_type,
+            })
+            .collect();
+        Ok(self.person_response_from_record(person, faces))
+    }
+
     /// Returns distinct photo IDs for photos that contain this person's faces.
     pub fn get_photo_ids_for_person(
         &self,
@@ -365,5 +390,147 @@ impl PersonsService {
         photo_ids.sort();
         photo_ids.dedup();
         Ok(photo_ids)
+    }
+
+    /// Build a chronological timeline for a person, grouping photos by year-month.
+    /// The caller must supply a resolved `photos` list (already fetched from Drive).
+    pub fn build_timeline(
+        &self,
+        person_id: &str,
+        user_id: &str,
+        resolved_photos: Vec<crate::photos::dto::PhotoResponse>,
+    ) -> Result<PersonTimelineResponse, ApiError> {
+        let person = self.repo.get_person(person_id)?;
+        if person.user_id != user_id {
+            return Err(ApiError::new(403, "FORBIDDEN", "Access denied"));
+        }
+
+        // Get dates for each photo from the DB (capture_date or created_at).
+        let photo_dates = self
+            .repo
+            .list_photo_ids_for_person_with_dates(user_id, person_id)?;
+        let date_map: std::collections::HashMap<String, chrono::NaiveDateTime> =
+            photo_dates.into_iter().collect();
+
+        // Sort resolved photos by their date.
+        let mut sorted = resolved_photos;
+        sorted.sort_by_key(|p| {
+            date_map
+                .get(&p.id)
+                .copied()
+                .unwrap_or_else(|| chrono::NaiveDateTime::MIN)
+        });
+
+        // Group by year-month.
+        use std::collections::BTreeMap;
+        let mut groups: BTreeMap<String, Vec<crate::photos::dto::PhotoResponse>> = BTreeMap::new();
+        for photo in sorted {
+            let date = date_map
+                .get(&photo.id)
+                .copied()
+                .unwrap_or_else(|| chrono::NaiveDateTime::MIN);
+            let key = format!("{}-{:02}", date.format("%Y"), date.month());
+            groups.entry(key).or_default().push(photo);
+        }
+
+        let timeline_groups: Vec<TimelineGroup> = groups
+            .into_iter()
+            .map(|(month, photos)| {
+                // Build human-readable label from the month key "YYYY-MM".
+                let label = if let Ok(d) = chrono::NaiveDate::parse_from_str(
+                    &format!("{}-01", month),
+                    "%Y-%m-%d",
+                ) {
+                    format!("{} {}", month_name(d.month()), d.year())
+                } else {
+                    month.clone()
+                };
+                TimelineGroup { label, month, photos }
+            })
+            .collect();
+
+        Ok(PersonTimelineResponse { groups: timeline_groups })
+    }
+
+    /// Compute co-occurrence relationships: persons who frequently appear together.
+    pub fn get_relationships(
+        &self,
+        user_id: &str,
+    ) -> Result<PersonRelationshipsResponse, ApiError> {
+        let pairs = self.repo.list_person_photo_pairs_for_user(user_id)?;
+
+        // Build photo_id → Vec<person_id> map.
+        let mut photo_persons: std::collections::HashMap<String, Vec<String>> =
+            std::collections::HashMap::new();
+        for (photo_id, person_id) in pairs {
+            photo_persons.entry(photo_id).or_default().push(person_id);
+        }
+
+        // Count co-occurrences for each ordered pair.
+        let mut cooccurrence: std::collections::HashMap<(String, String), usize> =
+            std::collections::HashMap::new();
+        for persons in photo_persons.values() {
+            let mut sorted = persons.clone();
+            sorted.sort();
+            sorted.dedup();
+            for i in 0..sorted.len() {
+                for j in (i + 1)..sorted.len() {
+                    let key = (sorted[i].clone(), sorted[j].clone());
+                    *cooccurrence.entry(key).or_insert(0) += 1;
+                }
+            }
+        }
+
+        if cooccurrence.is_empty() {
+            return Ok(PersonRelationshipsResponse { relationships: vec![] });
+        }
+
+        // Load all persons for this user to get names and thumbnails.
+        let all_persons = self.repo.list_persons_for_user(user_id)?;
+        let person_map: std::collections::HashMap<String, crate::persons::model::PersonRecord> =
+            all_persons.into_iter().map(|p| (p.id.clone(), p)).collect();
+
+        let mut relationships: Vec<PersonRelationship> = cooccurrence
+            .into_iter()
+            .filter(|(_, count)| *count >= 1)
+            .map(|((a_id, b_id), count)| {
+                let a = person_map.get(&a_id);
+                let b = person_map.get(&b_id);
+                PersonRelationship {
+                    person_a_id: a_id,
+                    person_a_name: a.and_then(|p| p.name.clone()),
+                    person_a_thumbnail: a.and_then(|p| p.cover_thumbnail.clone()),
+                    person_a_thumbnail_mime_type: a.and_then(|p| p.cover_thumbnail_mime_type.clone()),
+                    person_b_id: b_id,
+                    person_b_name: b.and_then(|p| p.name.clone()),
+                    person_b_thumbnail: b.and_then(|p| p.cover_thumbnail.clone()),
+                    person_b_thumbnail_mime_type: b.and_then(|p| p.cover_thumbnail_mime_type.clone()),
+                    photo_count: count,
+                }
+            })
+            .collect();
+
+        // Sort by frequency descending.
+        relationships.sort_by(|a, b| b.photo_count.cmp(&a.photo_count));
+
+        Ok(PersonRelationshipsResponse { relationships })
+    }
+}
+
+fn month_name(month: u32) -> &'static str {
+    match month {
+        1 => "January",
+        2 => "February",
+        3 => "March",
+        4 => "April",
+        5 => "May",
+        6 => "June",
+        7 => "July",
+        8 => "August",
+        9 => "September",
+        10 => "October",
+        11 => "November",
+        12 => "December",
+        _ => "Unknown",
     }
 }

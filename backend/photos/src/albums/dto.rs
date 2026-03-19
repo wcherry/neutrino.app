@@ -27,6 +27,8 @@ pub struct AlbumResponse {
     pub id: String,
     pub title: String,
     pub description: Option<String>,
+    pub is_auto: bool,
+    pub person_id: Option<String>,
     pub photo_count: usize,
     pub created_at: String,
     pub updated_at: String,

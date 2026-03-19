@@ -36,6 +36,8 @@ impl AlbumsService {
                     id: r.id,
                     title: r.title,
                     description: r.description,
+                    is_auto: r.is_auto,
+                    person_id: r.person_id,
                     photo_count: count,
                     created_at: r.created_at.and_utc().to_rfc3339(),
                     updated_at: r.updated_at.and_utc().to_rfc3339(),
@@ -60,13 +62,59 @@ impl AlbumsService {
             user_id: &user.user_id,
             title: &title,
             description: req.description.as_deref(),
+            is_auto: false,
+            person_id: None,
         };
         let album = self.albums_repo.insert_album(new_album)?;
         Ok(AlbumResponse {
             id: album.id,
             title: album.title,
             description: album.description,
+            is_auto: album.is_auto,
+            person_id: album.person_id,
             photo_count: 0,
+            created_at: album.created_at.and_utc().to_rfc3339(),
+            updated_at: album.updated_at.and_utc().to_rfc3339(),
+        })
+    }
+
+    /// Create or refresh the smart album for a named person.
+    /// Returns the album (creating it if it doesn't already exist) and syncs all photo IDs.
+    pub fn upsert_person_smart_album(
+        &self,
+        user_id: &str,
+        person_id: &str,
+        person_name: &str,
+        photo_ids: &[String],
+    ) -> Result<AlbumResponse, ApiError> {
+        let existing = self.albums_repo.find_auto_album_for_person(user_id, person_id)?;
+        let album_id = if let Some(existing_album) = existing {
+            existing_album.id
+        } else {
+            let id = Uuid::new_v4().to_string();
+            let title = format!("Photos of {}", person_name);
+            let new_album = NewAlbumRecord {
+                id: &id,
+                user_id,
+                title: &title,
+                description: None,
+                is_auto: true,
+                person_id: Some(person_id),
+            };
+            self.albums_repo.insert_album(new_album)?.id
+        };
+
+        self.albums_repo.sync_album_photos(&album_id, photo_ids)?;
+
+        let album = self.albums_repo.get_album(&album_id)?;
+        let count = self.albums_repo.count_album_photos(&album_id)?;
+        Ok(AlbumResponse {
+            id: album.id,
+            title: album.title,
+            description: album.description,
+            is_auto: album.is_auto,
+            person_id: album.person_id,
+            photo_count: count,
             created_at: album.created_at.and_utc().to_rfc3339(),
             updated_at: album.updated_at.and_utc().to_rfc3339(),
         })
@@ -86,6 +134,8 @@ impl AlbumsService {
             id: album.id,
             title: album.title,
             description: album.description,
+            is_auto: album.is_auto,
+            person_id: album.person_id,
             photo_count: count,
             created_at: album.created_at.and_utc().to_rfc3339(),
             updated_at: album.updated_at.and_utc().to_rfc3339(),
@@ -116,6 +166,8 @@ impl AlbumsService {
             id: updated.id,
             title: updated.title,
             description: updated.description,
+            is_auto: updated.is_auto,
+            person_id: updated.person_id,
             photo_count: count,
             created_at: updated.created_at.and_utc().to_rfc3339(),
             updated_at: updated.updated_at.and_utc().to_rfc3339(),

@@ -1300,6 +1300,8 @@ export interface AlbumResponse {
   id: string;
   title: string;
   description: string | null;
+  isAuto: boolean;
+  personId: string | null;
   photoCount: number;
   createdAt: string;
   updatedAt: string;
@@ -1319,16 +1321,48 @@ export interface UpdateAlbumRequest {
   description?: string | null;
 }
 
+// ---------------------------------------------------------------------------
+// Phase 7 types: Timeline & Relationships
+// ---------------------------------------------------------------------------
+
+export interface TimelineGroup {
+  label: string;
+  month: string;
+  photos: PhotoResponse[];
+}
+
+export interface PersonTimelineResponse {
+  groups: TimelineGroup[];
+}
+
+export interface PersonRelationship {
+  personAId: string;
+  personAName: string | null;
+  personAThumbnail: string | null;
+  personAThumbnailMimeType: string | null;
+  personBId: string;
+  personBName: string | null;
+  personBThumbnail: string | null;
+  personBThumbnailMimeType: string | null;
+  photoCount: number;
+}
+
+export interface PersonRelationshipsResponse {
+  relationships: PersonRelationship[];
+}
+
 export const photosApi = {
   async listPhotos(opts?: {
     archivedOnly?: boolean;
     starredOnly?: boolean;
     personIds?: string[];
+    excludePersonIds?: string[];
   }): Promise<ListPhotosResponse> {
     const qs = buildQuery({
       archivedOnly: opts?.archivedOnly,
       starredOnly: opts?.starredOnly,
       personIds: opts?.personIds?.length ? opts.personIds.join(',') : undefined,
+      excludePersonIds: opts?.excludePersonIds?.length ? opts.excludePersonIds.join(',') : undefined,
     });
     return request<ListPhotosResponse>(`/api/v1/photos${qs}`);
   },
@@ -1432,6 +1466,17 @@ export const personsApi = {
   },
   async listPersonPhotos(personId: string): Promise<ListPhotosResponse> {
     return request<ListPhotosResponse>(`/api/v1/photos/persons/${personId}/photos`);
+  },
+  async getPersonTimeline(personId: string): Promise<PersonTimelineResponse> {
+    return request<PersonTimelineResponse>(`/api/v1/photos/persons/${personId}/timeline`);
+  },
+  async getRelationships(): Promise<PersonRelationshipsResponse> {
+    return request<PersonRelationshipsResponse>('/api/v1/photos/persons/relationships');
+  },
+  async createSmartAlbum(personId: string): Promise<AlbumResponse> {
+    return request<AlbumResponse>(`/api/v1/photos/persons/${personId}/smart-album`, {
+      method: 'POST',
+    });
   },
   async renamePerson(personId: string, name: string): Promise<PersonResponse> {
     return request<PersonResponse>(`/api/v1/photos/persons/${personId}`, {
