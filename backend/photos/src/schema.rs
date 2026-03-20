@@ -7,8 +7,6 @@ diesel::table! {
         is_archived -> Bool,
         deleted_at -> Nullable<Timestamp>,
         capture_date -> Nullable<Timestamp>,
-        thumbnail -> Nullable<Text>,
-        thumbnail_mime_type -> Nullable<Text>,
         metadata -> Nullable<Text>,
         created_at -> Timestamp,
         updated_at -> Timestamp,

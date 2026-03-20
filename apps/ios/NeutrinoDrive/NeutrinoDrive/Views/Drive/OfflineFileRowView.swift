@@ -17,7 +17,7 @@ struct OfflineFileRowView: View {
                     .foregroundColor(.secondary)
             }
             Spacer()
-            if item.isPinned {
+            if item.isStarred {
                 Image(systemName: "star.fill")
                     .foregroundColor(.yellow)
             }

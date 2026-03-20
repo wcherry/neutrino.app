@@ -5,7 +5,7 @@ use crate::photos::{
 };
 use chrono::Utc;
 use shared::auth::AuthenticatedUser;
-use shared::drive_client::DriveClient;
+use shared::drive_client::{DriveClient, DriveFileRecord};
 use shared::ApiError;
 use std::sync::Arc;
 use uuid::Uuid;
@@ -62,28 +62,19 @@ impl PhotosService {
             is_archived: false,
             deleted_at: None,
             capture_date,
-            thumbnail: None,
-            thumbnail_mime_type: None,
             metadata: None,
         };
         let photo = self.repo.insert_photo(new_photo)?;
 
         // Enqueue thumbnail + face detection jobs via drive API — failures are non-fatal.
-        if let Err(e) = self.enqueue_thumbnail_job(&id, &req.file_id).await {
-            tracing::warn!("Failed to enqueue thumbnail job for photo {}: {}", id, e);
+        if let Err(e) = self.enqueue_thumbnail_job(&req.file_id).await {
+            tracing::warn!("Failed to enqueue thumbnail job for file {}: {}", req.file_id, e);
         }
         if let Err(e) = self.enqueue_face_detect_job(&id, &req.file_id, &user.user_id).await {
             tracing::warn!("Failed to enqueue face_detect job for photo {}: {}", id, e);
         }
 
-        Ok(self.to_response(
-            photo,
-            &file.name,
-            file.mime_type
-                .as_deref()
-                .unwrap_or("application/octet-stream"),
-            0,
-        ))
+        Ok(self.to_response(photo, Some(&file)))
     }
 
     async fn enqueue_face_detect_job(&self, photo_id: &str, file_id: &str, user_id: &str) -> Result<(), String> {
@@ -108,11 +99,11 @@ impl PhotosService {
         }
     }
 
-    async fn enqueue_thumbnail_job(&self, photo_id: &str, file_id: &str) -> Result<(), String> {
+    async fn enqueue_thumbnail_job(&self, file_id: &str) -> Result<(), String> {
         let url = format!("{}/api/v1/jobs", self.drive_base_url);
         let body = serde_json::json!({
             "jobType": "thumbnail",
-            "payload": { "photoId": photo_id, "fileId": file_id },
+            "payload": { "fileId": file_id },
             "timeoutSecs": 30
         });
         let resp = self
@@ -198,19 +189,7 @@ impl PhotosService {
                 .get_file(&user.token, &r.file_id, "File not found")
                 .await
                 .ok();
-            let (name, mime_type) = if let Some(f) = file {
-                (
-                    f.name,
-                    f.mime_type
-                        .unwrap_or_else(|| "application/octet-stream".to_string()),
-                )
-            } else {
-                (
-                    "Unknown".to_string(),
-                    "application/octet-stream".to_string(),
-                )
-            };
-            responses.push(self.to_response(r.clone(), &name, &mime_type, 0));
+            responses.push(self.to_response(r.clone(), file.as_ref()));
         }
         let total = responses.len();
         Ok(ListPhotosResponse {
@@ -232,14 +211,7 @@ impl PhotosService {
             .drive
             .get_file(&user.token, &photo.file_id, "File not found")
             .await?;
-        Ok(self.to_response(
-            photo,
-            &file.name,
-            file.mime_type
-                .as_deref()
-                .unwrap_or("application/octet-stream"),
-            0,
-        ))
+        Ok(self.to_response(photo, Some(&file)))
     }
 
     pub async fn update_photo(
@@ -257,8 +229,6 @@ impl PhotosService {
             is_starred: req.is_starred,
             is_archived: req.is_archived,
             deleted_at: None,
-            thumbnail: None,
-            thumbnail_mime_type: None,
             updated_at: Utc::now().naive_utc(),
         };
         let updated = self.repo.update_photo(photo_id, changes)?;
@@ -268,11 +238,7 @@ impl PhotosService {
             .await?;
         Ok(self.to_response(
             updated,
-            &file.name,
-            file.mime_type
-                .as_deref()
-                .unwrap_or("application/octet-stream"),
-            0,
+            Some(&file),
         ))
     }
 
@@ -289,8 +255,6 @@ impl PhotosService {
             is_starred: None,
             is_archived: None,
             deleted_at: Some(Some(Utc::now().naive_utc())),
-            thumbnail: None,
-            thumbnail_mime_type: None,
             updated_at: Utc::now().naive_utc(),
         };
         self.repo.update_photo(photo_id, changes)?;
@@ -313,8 +277,6 @@ impl PhotosService {
             is_starred: None,
             is_archived: None,
             deleted_at: Some(None),
-            thumbnail: None,
-            thumbnail_mime_type: None,
             updated_at: Utc::now().naive_utc(),
         };
         let updated = self.repo.update_photo(photo_id, changes)?;
@@ -324,11 +286,7 @@ impl PhotosService {
             .await?;
         Ok(self.to_response(
             updated,
-            &file.name,
-            file.mime_type
-                .as_deref()
-                .unwrap_or("application/octet-stream"),
-            0,
+            Some(&file),
         ))
     }
 
@@ -344,19 +302,7 @@ impl PhotosService {
                 .get_file(&user.token, &r.file_id, "File not found")
                 .await
                 .ok();
-            let (name, mime_type) = if let Some(f) = file {
-                (
-                    f.name,
-                    f.mime_type
-                        .unwrap_or_else(|| "application/octet-stream".to_string()),
-                )
-            } else {
-                (
-                    "Unknown".to_string(),
-                    "application/octet-stream".to_string(),
-                )
-            };
-            responses.push(self.to_response(r.clone(), &name, &mime_type, 0));
+            responses.push(self.to_response(r.clone(), file.as_ref()));
         }
         let total = responses.len();
         Ok(ListPhotosResponse {
@@ -370,25 +316,11 @@ impl PhotosService {
         Ok(())
     }
 
-    pub fn save_thumbnail(
-        &self,
-        photo_id: &str,
-        data: String,
-        mime_type: String,
-    ) -> Result<(), ApiError> {
-        self.repo.get_photo_including_deleted(photo_id)?;
-        self.repo.set_thumbnail(photo_id, data, mime_type)
-    }
-
     pub fn save_metadata(&self, photo_id: &str, metadata: String) -> Result<(), ApiError> {
         let _: serde_json::Value = serde_json::from_str(&metadata)
             .map_err(|_| ApiError::bad_request("Invalid JSON metadata"))?;
         self.repo.get_photo_including_deleted(photo_id)?;
         self.repo.set_metadata(photo_id, metadata)
-    }
-
-    pub fn get_thumbnail(&self, photo_id: &str) -> Result<Option<(String, String)>, ApiError> {
-        self.repo.get_thumbnail(photo_id)
     }
 
     pub async fn list_photos_by_ids(
@@ -410,19 +342,7 @@ impl PhotosService {
                 .get_file(&user.token, &photo.file_id, "File not found")
                 .await
                 .ok();
-            let (name, mime_type) = if let Some(f) = file {
-                (
-                    f.name,
-                    f.mime_type
-                        .unwrap_or_else(|| "application/octet-stream".to_string()),
-                )
-            } else {
-                (
-                    "Unknown".to_string(),
-                    "application/octet-stream".to_string(),
-                )
-            };
-            responses.push(self.to_response(photo, &name, &mime_type, 0));
+            responses.push(self.to_response(photo, file.as_ref()));
         }
         let total = responses.len();
         Ok(ListPhotosResponse {
@@ -431,13 +351,13 @@ impl PhotosService {
         })
     }
 
-    fn to_response(
-        &self,
-        photo: PhotoRecord,
-        name: &str,
-        mime_type: &str,
-        size: i64,
-    ) -> PhotoResponse {
+    fn to_response(&self, photo: PhotoRecord, file: Option<&DriveFileRecord>) -> PhotoResponse {
+        let name = file.map(|f| f.name.as_str()).unwrap_or("Unknown");
+        let mime_type = file
+            .and_then(|f| f.mime_type.as_deref())
+            .unwrap_or("application/octet-stream");
+        let thumbnail = file.and_then(|f| f.cover_thumbnail.clone());
+        let thumbnail_mime_type = file.and_then(|f| f.cover_thumbnail_mime_type.clone());
         let metadata = photo
             .metadata
             .as_deref()
@@ -447,10 +367,10 @@ impl PhotosService {
             file_id: photo.file_id.clone(),
             file_name: name.to_string(),
             mime_type: mime_type.to_string(),
-            size_bytes: size,
-            content_url: format!("api/v1/drive/files/{}", photo.file_id),
-            thumbnail: photo.thumbnail,
-            thumbnail_mime_type: photo.thumbnail_mime_type,
+            size_bytes: file.map(|f| f.size_bytes).unwrap_or(0),
+            content_url: format!("/api/v1/drive/files/{}", photo.file_id),
+            thumbnail,
+            thumbnail_mime_type,
             is_starred: photo.is_starred,
             is_archived: photo.is_archived,
             capture_date: photo.capture_date.map(|d| d.and_utc().to_rfc3339()),

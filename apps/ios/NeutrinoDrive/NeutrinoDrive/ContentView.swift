@@ -15,7 +15,6 @@ struct ContentView: View {
             if auth.isAuthenticated {
                 if settings.biometricEnabled && !biometrics.isUnlocked {
                     LockView()
-                        .onAppear { biometrics.authenticate() }
                 } else {
                     DriveHomeView()
                         .task {
@@ -32,15 +31,13 @@ struct ContentView: View {
             Text(errorMessage ?? "")
         }
         .onChange(of: scenePhase) { phase in
-            if phase == .background {
+            if phase == .background && settings.biometricEnabled {
                 biometrics.reset()
             }
         }
         .onChange(of: settings.biometricEnabled) { enabled in
-            if enabled {
-                biometrics.reset()
-                biometrics.authenticate()
-            } else {
+            if !enabled {
+                biometrics.clearError()
                 biometrics.setUnlocked(true)
             }
         }

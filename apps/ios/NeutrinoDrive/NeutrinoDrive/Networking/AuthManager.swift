@@ -1,5 +1,6 @@
 import Foundation
 
+@MainActor
 final class AuthManager: ObservableObject {
     static let shared = AuthManager()
 

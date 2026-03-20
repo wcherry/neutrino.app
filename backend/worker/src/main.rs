@@ -167,26 +167,29 @@ async fn process_thumbnail(state: &WorkerState, job: &JobResponse) -> Result<(),
     #[derive(serde::Deserialize)]
     #[serde(rename_all = "camelCase")]
     struct Payload {
-        photo_id: String,
         file_id: String,
+        // photo_id is kept for backward compatibility with jobs already in the queue
+        photo_id: Option<String>,
     }
 
     let payload: Payload = serde_json::from_value(job.payload.clone())
         .map_err(|e| format!("Invalid payload: {}", e))?;
 
-    // Fetch the image bytes from drive.
+    // Fetch the file bytes from drive.
     let (bytes, mime_type) = state.drive.get_file_content(&payload.file_id).await?;
 
-    if !mime_type.starts_with("image/") {
-        return Err(format!("Not an image (mime_type={})", mime_type));
-    }
-
-    // Generate thumbnail and extract metadata on a blocking thread.
+    // Generate thumbnail (and optionally EXIF metadata for images) on a blocking thread.
+    let is_image = mime_type.starts_with("image/");
+    let mime_type_clone = mime_type.clone();
     let bytes_arc = std::sync::Arc::new(bytes);
     let bytes_for_thumb = bytes_arc.clone();
     let (thumb, photo_metadata) = tokio::task::spawn_blocking(move || {
-        let thumb = thumbnail::generate_jpeg_thumbnail(&bytes_for_thumb);
-        let meta = metadata::extract_metadata(&bytes_for_thumb);
+        let thumb = thumbnail::generate_thumbnail_for_type(&bytes_for_thumb, &mime_type_clone);
+        let meta: Option<metadata::PhotoMetadata> = if is_image {
+            Some(metadata::extract_metadata(&bytes_for_thumb))
+        } else {
+            None
+        };
         (thumb, meta)
     })
     .await
@@ -194,14 +197,15 @@ async fn process_thumbnail(state: &WorkerState, job: &JobResponse) -> Result<(),
 
     let thumb = thumb?;
 
-    // Upload thumbnail to the photos service.
+    // Upload thumbnail to the drive service (stored as cover_thumbnail on the file).
     let thumb_url = format!(
-        "{}/api/v1/photos/{}/thumbnail",
-        state.photos_url, payload.photo_id
+        "{}/api/v1/jobs/files/{}/thumbnail",
+        state.drive.base_url(), payload.file_id
     );
     let resp = state
         .http
         .put(&thumb_url)
+        .header("Authorization", format!("Bearer {}", state.drive.worker_secret()))
         .header("Content-Type", "image/jpeg")
         .body(thumb)
         .send()
@@ -214,26 +218,28 @@ async fn process_thumbnail(state: &WorkerState, job: &JobResponse) -> Result<(),
         return Err(format!("Thumbnail upload returned {}: {}", status, body));
     }
 
-    // Upload metadata to the photos service (non-fatal on failure).
-    match serde_json::to_string(&photo_metadata) {
-        Ok(meta_json) => {
-            let meta_url = format!(
-                "{}/api/v1/photos/{}/metadata",
-                state.photos_url, payload.photo_id
-            );
-            if let Err(e) = state
-                .http
-                .put(&meta_url)
-                .header("Content-Type", "application/json")
-                .body(meta_json)
-                .send()
-                .await
-            {
-                tracing::warn!("Metadata upload failed for photo {}: {}", payload.photo_id, e);
+    // Upload metadata to the photos service if we have a photo_id and image metadata (non-fatal).
+    if let (Some(photo_id), Some(meta)) = (payload.photo_id, photo_metadata) {
+        match serde_json::to_string(&meta) {
+            Ok(meta_json) => {
+                let meta_url = format!(
+                    "{}/api/v1/photos/{}/metadata",
+                    state.photos_url, photo_id
+                );
+                if let Err(e) = state
+                    .http
+                    .put(&meta_url)
+                    .header("Content-Type", "application/json")
+                    .body(meta_json)
+                    .send()
+                    .await
+                {
+                    tracing::warn!("Metadata upload failed for photo {}: {}", photo_id, e);
+                }
             }
-        }
-        Err(e) => {
-            tracing::warn!("Failed to serialize metadata for photo {}: {}", payload.photo_id, e);
+            Err(e) => {
+                tracing::warn!("Failed to serialize metadata for photo {}: {}", photo_id, e);
+            }
         }
     }
 

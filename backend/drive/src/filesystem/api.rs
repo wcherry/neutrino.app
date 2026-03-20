@@ -2,8 +2,8 @@ use crate::filesystem::{
     dto::{
         BulkMoveRequest, BulkResult, BulkTrashRequest, CreateFolderRequest, CreateShortcutRequest,
         FileResponse, FolderContentsOrderField, FolderContentsResponse, FolderResponse,
-        ShortcutResponse, TrashContentsResponse, TrashOrderField, UpdateFileRequest,
-        UpdateFolderRequest,
+        ShortcutResponse, StarredContentsResponse, TrashContentsResponse, TrashOrderField,
+        UpdateFileRequest, UpdateFolderRequest,
     },
     repository::FilesystemRepository,
     service::FilesystemService,
@@ -492,6 +492,38 @@ pub async fn delete_folder_permanently(
     Ok(HttpResponse::NoContent().finish())
 }
 
+// ── Starred (Quick Access) ────────────────────────────────────────────────────
+
+#[derive(serde::Deserialize)]
+pub struct StarredQuery {
+    pub limit: Option<usize>,
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/v1/drive/starred",
+    params(
+        ("limit" = Option<usize>, Query, description = "Max number of starred items to return (default 5)"),
+    ),
+    responses(
+        (status = 200, description = "Most recently starred files and folders", body = StarredContentsResponse),
+    ),
+    security(("bearer_auth" = [])),
+    tag = "filesystem"
+)]
+#[get("/starred")]
+pub async fn get_starred(
+    state: web::Data<FilesystemApiState>,
+    user: AuthenticatedUser,
+    query: web::Query<StarredQuery>,
+) -> Result<web::Json<StarredContentsResponse>, ApiError> {
+    let limit = query.limit.unwrap_or(5);
+    let result = state
+        .filesystem_service
+        .list_starred(&user.user_id, limit)?;
+    Ok(web::Json(result))
+}
+
 // ── Shared with me ────────────────────────────────────────────────────────────
 
 #[derive(Debug, Serialize)]
@@ -574,7 +606,8 @@ pub fn configure(conf: &mut web::ServiceConfig) {
         .service(delete_file_permanently)
         .service(restore_folder)
         .service(delete_folder_permanently)
-        .service(get_shared_with_me);
+        .service(get_shared_with_me)
+        .service(get_starred);
 }
 
 #[derive(OpenApi)]
@@ -599,6 +632,7 @@ pub fn configure(conf: &mut web::ServiceConfig) {
         restore_folder,
         delete_folder_permanently,
         get_shared_with_me,
+        get_starred,
     ),
     components(schemas(
         CreateFolderRequest,
@@ -617,6 +651,7 @@ pub fn configure(conf: &mut web::ServiceConfig) {
         TrashOrderField,
         crate::filesystem::dto::TrashFileItem,
         crate::filesystem::dto::TrashFolderItem,
+        StarredContentsResponse,
     )),
     tags((name = "filesystem", description = "File system organization endpoints")),
     modifiers(&SecurityAddon)

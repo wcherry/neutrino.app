@@ -3,12 +3,10 @@ use crate::photos::{
     service::PhotosService,
 };
 use actix_web::{delete, get, patch, post, put, web, HttpResponse};
-use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use shared::auth::AuthenticatedUser;
 use shared::ApiError;
 use std::sync::Arc;
 use utoipa::OpenApi;
-use tracing::{debug};
 
 pub struct PhotosApiState {
     pub photos_service: Arc<PhotosService>,
@@ -231,68 +229,6 @@ pub async fn empty_trash(
     Ok(HttpResponse::NoContent().finish())
 }
 
-/// Worker endpoint — stores a generated thumbnail for a photo.
-/// Accepts the image bytes as the raw request body.
-/// The Content-Type header is used as the thumbnail MIME type.
-#[utoipa::path(
-    put,
-    path = "/api/v1/photos/{id}/thumbnail",
-    params(("id" = String, Path, description = "Photo ID")),
-    responses(
-        (status = 204, description = "Thumbnail saved"),
-        (status = 404, description = "Photo not found"),
-    ),
-    tag = "photos"
-)]
-#[put("/photos/{id}/thumbnail")]
-pub async fn put_thumbnail(
-    state: web::Data<PhotosApiState>,
-    path: web::Path<String>,
-    req: actix_web::HttpRequest,
-    body: web::Bytes,
-) -> Result<HttpResponse, ApiError> {
-    let photo_id = path.into_inner();
-    let mime_type = req
-        .headers()
-        .get("Content-Type")
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("image/jpeg")
-        .to_string();
-    let b64 = BASE64.encode(&body);
-    state
-        .photos_service
-        .save_thumbnail(&photo_id, b64, mime_type)?;
-    Ok(HttpResponse::NoContent().finish())
-}
-
-/// Returns the raw thumbnail image bytes for a photo.
-#[utoipa::path(
-    get,
-    path = "/api/v1/photos/{id}/thumbnail",
-    params(("id" = String, Path, description = "Photo ID")),
-    responses(
-        (status = 200, description = "Thumbnail image bytes"),
-        (status = 404, description = "Photo or thumbnail not found"),
-    ),
-    security(("bearer_auth" = [])),
-    tag = "photos"
-)]
-#[get("/photos/{id}/thumbnail")]
-pub async fn get_thumbnail(
-    state: web::Data<PhotosApiState>,
-    _user: AuthenticatedUser,
-    path: web::Path<String>,
-) -> Result<HttpResponse, ApiError> {
-    let photo_id = path.into_inner();
-    match state.photos_service.get_thumbnail(&photo_id)? {
-        Some((b64, mime_type)) => {
-            let bytes = BASE64.decode(&b64).map_err(|_| ApiError::internal("Invalid thumbnail data"))?;
-            Ok(HttpResponse::Ok().content_type(mime_type).body(bytes))
-        }
-        None => Err(ApiError::not_found("Thumbnail not yet available")),
-    }
-}
-
 /// Worker endpoint — stores extracted image metadata for a photo.
 /// Accepts a JSON body. No user auth required (worker-to-service call).
 #[utoipa::path(
@@ -328,8 +264,6 @@ pub fn configure_photos(cfg: &mut web::ServiceConfig) {
         .service(update_photo)
         .service(trash_photo)
         .service(restore_photo)
-        .service(put_thumbnail)
-        .service(get_thumbnail)
         .service(put_metadata);
 }
 
@@ -344,8 +278,6 @@ pub fn configure_photos(cfg: &mut web::ServiceConfig) {
         restore_photo,
         list_trash,
         empty_trash,
-        put_thumbnail,
-        get_thumbnail
     ),
     components(schemas(
         RegisterPhotoRequest,

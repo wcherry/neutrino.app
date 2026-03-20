@@ -9,11 +9,14 @@ use tracing::{error, info};
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
+mod collab;
 mod common;
 mod config;
 mod docs;
 mod schema;
 
+use crate::collab::repository::CollabRepository;
+use crate::collab::state::CollabState;
 use crate::common::TokenService;
 use crate::config::Config;
 use crate::docs::api::{DocsApiDoc, DocsApiState};
@@ -104,6 +107,9 @@ async fn main() -> std::io::Result<()> {
     let docs_service = Arc::new(DocsService::new(docs_repo, drive_client));
     let docs_state = web::Data::new(DocsApiState { docs_service });
 
+    let collab_repo = web::Data::new(Arc::new(CollabRepository::new(pool.clone())));
+    let collab_state = web::Data::new(Arc::new(CollabState::new()));
+
     let token_service_data = web::Data::new(token_service.clone());
     let pool_data = web::Data::new(pool.clone());
     let bind_addr = format!("0.0.0.0:{}", config.port);
@@ -117,12 +123,15 @@ async fn main() -> std::io::Result<()> {
             .app_data(pool_data.clone())
             .app_data(docs_state.clone())
             .app_data(token_service_data.clone())
+            .app_data(collab_repo.clone())
+            .app_data(collab_state.clone())
             .wrap(Logger::default())
             .wrap(Cors::permissive())
             .service(health)
             .service(
                 web::scope("/api/v1")
-                    .configure(docs::api::configure),
+                    .configure(docs::api::configure)
+                    .configure(collab::api::configure),
             )
             .service(
                 SwaggerUi::new("/swagger-ui/{_:.*}")

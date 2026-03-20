@@ -5,21 +5,33 @@ struct LockView: View {
 
     var body: some View {
         VStack(spacing: 16) {
-            Image(systemName: "faceid")
+            Image(systemName: biometrics.biometryIconName)
                 .font(.system(size: 48))
                 .foregroundColor(.accentColor)
-            Text("Face ID Required")
+            Text("\(biometrics.biometryDisplayName) Required")
                 .font(.title2)
+            Text("Unlock Neutrino Drive with \(biometrics.biometryDisplayName).")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
             if let error = biometrics.lastError {
                 Text(error)
                     .font(.caption)
                     .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
             }
-            Button("Unlock") {
-                biometrics.authenticate()
+            Button(biometrics.isAuthenticating ? "Checking..." : "Use \(biometrics.biometryDisplayName)") {
+                Task {
+                    await biometrics.authenticate()
+                }
             }
             .buttonStyle(.borderedProminent)
+            .disabled(biometrics.isAuthenticating)
         }
         .padding()
+        .task {
+            biometrics.refreshAvailability()
+            await biometrics.authenticate()
+        }
     }
 }

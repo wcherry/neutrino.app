@@ -1,8 +1,10 @@
 use std::sync::Arc;
 
-use actix_web::{delete, get, patch, post, web, HttpRequest, HttpResponse};
+use actix_web::{delete, get, patch, post, put, web, HttpRequest, HttpResponse};
 use actix_web::dev::Payload;
 use actix_web::FromRequest;
+use base64::engine::general_purpose::STANDARD as BASE64;
+use base64::Engine as _;
 use std::future::{ready, Ready};
 
 use crate::jobs::{
@@ -12,6 +14,7 @@ use crate::jobs::{
     },
     service::JobsService,
 };
+use crate::storage::service::StorageService;
 use shared::ApiError;
 
 // ── Worker auth ───────────────────────────────────────────────────────────────
@@ -55,6 +58,7 @@ impl FromRequest for WorkerAuth {
 
 pub struct JobsApiState {
     pub jobs_service: Arc<JobsService>,
+    pub storage_service: Arc<StorageService>,
 }
 
 // ── Handlers ──────────────────────────────────────────────────────────────────
@@ -146,11 +150,36 @@ async fn deregister_worker(
     Ok(HttpResponse::NoContent().finish())
 }
 
+/// Worker uploads a generated cover thumbnail for a file.
+/// Accepts image bytes as the raw request body; Content-Type is used as MIME type.
+#[put("/jobs/files/{file_id}/thumbnail")]
+async fn put_file_thumbnail(
+    state: web::Data<JobsApiState>,
+    _auth: WorkerAuth,
+    path: web::Path<String>,
+    req: HttpRequest,
+    body: web::Bytes,
+) -> Result<HttpResponse, ApiError> {
+    let file_id = path.into_inner();
+    let mime_type = req
+        .headers()
+        .get("Content-Type")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("image/jpeg")
+        .to_string();
+    let b64 = BASE64.encode(&body);
+    state
+        .storage_service
+        .set_cover_thumbnail(&file_id, b64, mime_type)?;
+    Ok(HttpResponse::NoContent().finish())
+}
+
 pub fn configure(cfg: &mut web::ServiceConfig) {
     cfg.service(create_job)
         .service(get_pending_jobs)
         .service(update_job_status)
         .service(get_file_content)
+        .service(put_file_thumbnail)
         .service(register_worker)
         .service(deregister_worker);
 }

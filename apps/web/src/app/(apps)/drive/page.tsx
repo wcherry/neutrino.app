@@ -96,41 +96,10 @@ function fileToGridItem(file: FileItem): GridItem {
     sizeText: formatFileSize(file.sizeBytes),
     modifiedText: formatDate(file.updatedAt),
     isStarred: file.isStarred,
+    coverThumbnail: file.coverThumbnail,
+    coverThumbnailMimeType: file.coverThumbnailMimeType,
   };
 }
-
-const MOCK_RECENT_FILES: FileItem[] = [
-  {
-    id: 'f1',
-    name: 'Q4-Report.pdf',
-    sizeBytes: 4200000,
-    mimeType: 'application/pdf',
-    folderId: null,
-    isStarred: false,
-    createdAt: '2026-03-07T10:00:00Z',
-    updatedAt: '2026-03-07T10:00:00Z',
-  },
-  {
-    id: 'f2',
-    name: 'design-mockup.png',
-    sizeBytes: 2100000,
-    mimeType: 'image/png',
-    folderId: null,
-    isStarred: false,
-    createdAt: '2026-03-06T15:30:00Z',
-    updatedAt: '2026-03-06T15:30:00Z',
-  },
-  {
-    id: 'f3',
-    name: 'team-meeting-notes.txt',
-    sizeBytes: 8500,
-    mimeType: 'text/plain',
-    folderId: null,
-    isStarred: false,
-    createdAt: '2026-03-05T09:00:00Z',
-    updatedAt: '2026-03-05T09:00:00Z',
-  },
-];
 
 const DOC_MIME = 'application/x-neutrino-doc';
 const SHEET_MIME = 'application/x-neutrino-sheet';
@@ -166,6 +135,11 @@ export default function DrivePage() {
       renameInputRef.current.select();
     }
   }, [renaming]);
+
+  const { data: starredData } = useQuery({
+    queryKey: ['starred'],
+    queryFn: () => filesystemApi.getStarred(5),
+  });
 
   const { data: contentsData, isLoading, isError } = useQuery({
     queryKey: ['contents', currentFolderId, { orderBy: sortBy, direction: sortDir }],
@@ -233,7 +207,23 @@ export default function DrivePage() {
   const updateMutation = useMutation({
     mutationFn: ({ id, body }: { id: string; body: { name?: string; folderId?: string | null; isStarred?: boolean } }) =>
       filesystemApi.updateFile(id, body),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['contents'] }),
+    onSuccess: (_, { body }) => {
+      queryClient.invalidateQueries({ queryKey: ['contents'] });
+      if (body.isStarred !== undefined) {
+        queryClient.invalidateQueries({ queryKey: ['starred'] });
+      }
+    },
+  });
+
+  const updateFolderMutation = useMutation({
+    mutationFn: ({ id, body }: { id: string; body: { name?: string; isStarred?: boolean } }) =>
+      filesystemApi.updateFolder(id, body),
+    onSuccess: (_, { body }) => {
+      queryClient.invalidateQueries({ queryKey: ['contents'] });
+      if (body.isStarred !== undefined) {
+        queryClient.invalidateQueries({ queryKey: ['starred'] });
+      }
+    },
   });
 
   const deleteMutation = useMutation({
@@ -281,6 +271,23 @@ export default function DrivePage() {
         onError: () => toast.error('Failed to update file'),
       }
     );
+  }
+
+  function handleToggleStar(item: GridItem) {
+    if (item.kind === 'folder') {
+      const folder = folderMap.get(item.id);
+      if (!folder) return;
+      updateFolderMutation.mutate(
+        { id: folder.id, body: { isStarred: !folder.isStarred } },
+        {
+          onSuccess: () => toast.success(folder.isStarred ? 'Removed from starred' : 'Added to starred'),
+          onError: () => toast.error('Failed to update folder'),
+        }
+      );
+    } else {
+      const file = fileMap.get(item.id);
+      if (file) handleStar(file);
+    }
   }
 
   function handleDownload(file: FileItem) {
@@ -377,11 +384,11 @@ export default function DrivePage() {
           <Heading level={2} size="sm" id="quick-access-heading">Quick access</Heading>
           <Text as="span" size="xs" color="muted">
             <Clock size={12} style={{ display: 'inline', marginRight: '4px', verticalAlign: 'middle' }} />
-            Recently viewed
+            Recently starred
           </Text>
         </div>
         <div className={styles['quick-grid']}>
-          {isLoading
+          {!starredData
             ? Array.from({ length: 4 }, (_, i) => (
                 <div key={i} className={styles['quick-card-skeleton']}>
                   <Skeleton shape="rect" width={32} height={32} />
@@ -391,22 +398,53 @@ export default function DrivePage() {
                   </div>
                 </div>
               ))
-            : MOCK_RECENT_FILES.slice(0, 4).map((file) => {
-                const IconComponent = getFileIcon(file.mimeType);
-                return (
-                  <Card key={file.id} hoverable padding="sm" className={styles['quick-card']} role="button" tabIndex={0} aria-label={`Open ${file.name}`}>
-                    <div className={styles['quick-card-inner']}>
-                      <div className={styles['file-icon-sm']} style={{ color: getIconColor(file.mimeType) }}>
-                        <IconComponent size={20} strokeWidth={1.5} />
+            : (() => {
+                const starredFiles = starredData.files.map((file) => ({
+                  key: file.id,
+                  icon: getFileIcon(file.mimeType),
+                  iconColor: getIconColor(file.mimeType),
+                  name: file.name,
+                  date: file.updatedAt,
+                  onClick: () => {
+                    if (file.mimeType === DOC_MIME) router.push(`/docs/editor?id=${file.id}`);
+                    else if (file.mimeType === SHEET_MIME) router.push(`/sheets/editor?id=${file.id}`);
+                    else if (file.mimeType === SLIDES_MIME) router.push(`/slides/editor?id=${file.id}`);
+                    else setPreviewFile(file);
+                  },
+                }));
+                const starredFolders = starredData.folders.map((folder) => ({
+                  key: folder.id,
+                  icon: Folder,
+                  iconColor: folder.color ?? 'var(--color-amber, #d97706)',
+                  name: folder.name,
+                  date: folder.updatedAt,
+                  onClick: () => openFolder(folder),
+                }));
+                const items = [...starredFiles, ...starredFolders];
+                if (items.length === 0) {
+                  return (
+                    <Text size="sm" color="muted" style={{ gridColumn: '1 / -1', padding: '8px 0' }}>
+                      Star files and folders to see them here.
+                    </Text>
+                  );
+                }
+                return items.map((item) => {
+                  const IconComponent = item.icon;
+                  return (
+                    <Card key={item.key} hoverable padding="sm" className={styles['quick-card']} role="button" tabIndex={0} aria-label={`Open ${item.name}`} onClick={item.onClick}>
+                      <div className={styles['quick-card-inner']}>
+                        <div className={styles['file-icon-sm']} style={{ color: item.iconColor }}>
+                          <IconComponent size={20} strokeWidth={1.5} />
+                        </div>
+                        <div className={styles['quick-card-info']}>
+                          <Text size="sm" weight="medium" truncate>{item.name}</Text>
+                          <Text size="xs" color="muted">{formatDate(item.date)}</Text>
+                        </div>
                       </div>
-                      <div className={styles['quick-card-info']}>
-                        <Text size="sm" weight="medium" truncate>{file.name}</Text>
-                        <Text size="xs" color="muted">{formatDate(file.updatedAt)}</Text>
-                      </div>
-                    </div>
-                  </Card>
-                );
-              })}
+                    </Card>
+                  );
+                });
+              })()}
         </div>
       </section>
 
@@ -439,6 +477,7 @@ export default function DrivePage() {
           }
           onItemClick={handleGridItemClick}
           onItemMenuOpen={handleGridItemMenuOpen}
+          onToggleStar={handleToggleStar}
           showFilter
           showSizeColumn
           sortBy={sortBy}

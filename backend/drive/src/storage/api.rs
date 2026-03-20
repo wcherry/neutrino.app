@@ -2,6 +2,7 @@ use crate::common::{
     apply_list_query, ApiError, AuthenticatedUser, ListQuery, ListQueryParams, OrderDirection,
 };
 use crate::irm::service::IrmService;
+use crate::jobs::{dto::CreateJobRequest, service::JobsService};
 use crate::permissions::service::PermissionsService;
 use crate::storage::{
     dto::{
@@ -26,6 +27,29 @@ pub struct StorageApiState {
     pub storage_service: Arc<StorageService>,
     pub irm_service: Arc<IrmService>,
     pub permissions_service: Arc<PermissionsService>,
+    pub jobs_service: Arc<JobsService>,
+}
+
+/// MIME types for which the worker can generate a cover thumbnail.
+fn is_thumbnail_supported(mime_type: &str) -> bool {
+    let mime = mime_type.split(';').next().unwrap_or(mime_type).trim();
+    if mime.starts_with("image/") {
+        return true;
+    }
+    matches!(
+        mime,
+        "application/pdf"
+            | "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            | "application/msword"
+            | "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+            | "application/vnd.ms-powerpoint"
+            | "text/csv"
+            | "application/csv"
+            | "text/comma-separated-values"
+            | "application/x-neutrino-doc"
+            | "application/x-neutrino-sheet"
+            | "application/x-neutrino-slide"
+    )
 }
 
 #[utoipa::path(
@@ -151,6 +175,18 @@ pub async fn upload_file(
                 let _ = std::fs::remove_file(&temp_path);
             })?;
 
+        // Enqueue a thumbnail job for supported file types (best-effort).
+        if is_thumbnail_supported(&mime_type) {
+            let req = CreateJobRequest {
+                job_type: "thumbnail".to_string(),
+                payload: serde_json::json!({ "fileId": response.id }),
+                timeout_secs: 60,
+            };
+            if let Err(e) = state.jobs_service.create_job(req) {
+                tracing::warn!("Failed to enqueue thumbnail job for file {}: {:?}", response.id, e);
+            }
+        }
+
         return Ok(web::Json(response));
     }
 
@@ -186,13 +222,16 @@ pub async fn create_file_record(
     let response = DocFileMetadataResponse {
         id: file.id,
         name: file.name,
+        size_bytes: file.size_bytes,
         folder_id: file.folder_id,
         deleted_at: file.deleted_at,
-        your_role: "owner".to_string(), 
+        your_role: "owner".to_string(),
         storage_path: match file.storage_path.len()>1 {true => Some(file.storage_path), _ => None,},    //TODO: Storage path can be None
         mime_type: match file.mime_type.len()>1 {true => Some(file.mime_type), _ => None,},             //TODO: Mime type can be None
         created_at: file.created_at,
         updated_at: file.updated_at,
+        cover_thumbnail: file.cover_thumbnail,
+        cover_thumbnail_mime_type: file.cover_thumbnail_mime_type,
     };
     Ok(HttpResponse::Created().json(response))
 }
@@ -227,6 +266,7 @@ pub async fn get_file_info(
     Ok(web::Json(DocFileMetadataResponse {
         id: file.id,
         name: file.name,
+        size_bytes: file.size_bytes,
         folder_id: file.folder_id,
         deleted_at: file.deleted_at,
         your_role: role,
@@ -234,6 +274,8 @@ pub async fn get_file_info(
         mime_type: match file.mime_type.len()>1 {true => Some(file.mime_type), _ => None,},             //TODO: Mime type can be None
         created_at: file.created_at,
         updated_at: file.updated_at,
+        cover_thumbnail: file.cover_thumbnail,
+        cover_thumbnail_mime_type: file.cover_thumbnail_mime_type,
     }))
 }
 

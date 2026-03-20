@@ -25,6 +25,7 @@ struct DriveListFilesResponse {
 pub struct DriveFileRecord {
     pub id: String,
     pub name: String,
+    pub size_bytes: i64,
     pub folder_id: Option<String>,
     pub deleted_at: Option<NaiveDateTime>,
     pub your_role: String,
@@ -32,6 +33,8 @@ pub struct DriveFileRecord {
     pub mime_type: Option<String>,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
+    pub cover_thumbnail: Option<String>,
+    pub cover_thumbnail_mime_type: Option<String>,
 }
 
 #[derive(Debug, Serialize)]

@@ -390,6 +390,27 @@ impl StorageRepository {
         Ok(Some(version.storage_path))
     }
 
+    pub fn set_cover_thumbnail(
+        &self,
+        file_id: &str,
+        thumbnail: String,
+        mime_type: String,
+    ) -> Result<(), ApiError> {
+        let mut conn = self.get_conn()?;
+        diesel::update(files::table.filter(files::id.eq(file_id)))
+            .set((
+                files::cover_thumbnail.eq(Some(thumbnail)),
+                files::cover_thumbnail_mime_type.eq(Some(mime_type)),
+                files::updated_at.eq(chrono::Utc::now().naive_utc()),
+            ))
+            .execute(&mut conn)
+            .map_err(|e| {
+                tracing::error!("DB set cover thumbnail error: {:?}", e);
+                ApiError::internal("Database error")
+            })?;
+        Ok(())
+    }
+
     fn get_conn(
         &self,
     ) -> Result<diesel::r2d2::PooledConnection<ConnectionManager<SqliteConnection>>, ApiError>

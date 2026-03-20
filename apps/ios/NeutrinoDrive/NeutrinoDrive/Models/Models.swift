@@ -1,5 +1,42 @@
 import Foundation
 
+enum NeutrinoPreviewKind: String, Codable, Hashable {
+    case doc
+    case sheet
+    case slide
+
+    static func from(mimeType: String) -> NeutrinoPreviewKind? {
+        switch mimeType.lowercased() {
+        case "application/x-neutrino-doc":
+            return .doc
+        case "application/x-neutrino-sheet":
+            return .sheet
+        case "application/x-neutrino-slide", "application/x-neutrino-slides":
+            return .slide
+        default:
+            return nil
+        }
+    }
+
+    var displayName: String {
+        switch self {
+        case .doc:
+            return "Doc"
+        case .sheet:
+            return "Sheet"
+        case .slide:
+            return "Slide"
+        }
+    }
+}
+
+struct NeutrinoPreviewPayload: Identifiable, Hashable {
+    let id = UUID()
+    let title: String
+    let kind: NeutrinoPreviewKind
+    let content: String
+}
+
 struct ApiErrorEnvelope: Codable, Error {
     let error: ApiErrorDetail
 }
@@ -32,6 +69,10 @@ struct FileItem: Codable, Identifiable, Hashable {
     let isStarred: Bool
     let createdAt: String
     let updatedAt: String
+
+    var neutrinoPreviewKind: NeutrinoPreviewKind? {
+        NeutrinoPreviewKind.from(mimeType: mimeType)
+    }
 }
 
 struct FolderItem: Codable, Identifiable, Hashable {

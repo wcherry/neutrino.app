@@ -42,6 +42,10 @@ impl DriveJobsClient {
         &self.worker_secret
     }
 
+    pub fn base_url(&self) -> &str {
+        &self.base_url
+    }
+
     /// Enqueue a new job via the drive jobs API.
     pub async fn enqueue_job(
         &self,

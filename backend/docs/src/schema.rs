@@ -8,6 +8,10 @@ diesel::table! {
     }
 }
 
-// diesel::allow_tables_to_appear_in_same_query!(
-//     docs,
-// );
+diesel::table! {
+    doc_yjs_state (file_id) {
+        file_id -> Text,
+        state -> Binary,
+        updated_at -> Timestamp,
+    }
+}

@@ -13,8 +13,6 @@ pub struct PhotoRecord {
     pub is_archived: bool,
     pub deleted_at: Option<NaiveDateTime>,
     pub capture_date: Option<NaiveDateTime>,
-    pub thumbnail: Option<String>,
-    pub thumbnail_mime_type: Option<String>,
     pub metadata: Option<String>,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
@@ -30,8 +28,6 @@ pub struct NewPhotoRecord<'a> {
     pub is_archived: bool,
     pub deleted_at: Option<NaiveDateTime>,
     pub capture_date: Option<NaiveDateTime>,
-    pub thumbnail: Option<&'a str>,
-    pub thumbnail_mime_type: Option<&'a str>,
     pub metadata: Option<&'a str>,
 }
 
@@ -41,7 +37,5 @@ pub struct UpdatePhotoRecord {
     pub is_starred: Option<bool>,
     pub is_archived: Option<bool>,
     pub deleted_at: Option<Option<NaiveDateTime>>,
-    pub thumbnail: Option<Option<String>>,
-    pub thumbnail_mime_type: Option<Option<String>>,
     pub updated_at: NaiveDateTime,
 }

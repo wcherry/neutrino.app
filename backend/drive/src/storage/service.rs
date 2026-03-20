@@ -417,6 +417,15 @@ impl StorageService {
         self.repo.find_file_by_id(file_id)
     }
 
+    pub fn set_cover_thumbnail(
+        &self,
+        file_id: &str,
+        thumbnail: String,
+        mime_type: String,
+    ) -> Result<(), ApiError> {
+        self.repo.set_cover_thumbnail(file_id, thumbnail, mime_type)
+    }
+
     // ── Private helpers ────────────────────────────────────────────────────────
 
     /// Copies `source` to a new version snapshot and inserts the DB record.

@@ -8,6 +8,7 @@ struct APIClientError: Error, LocalizedError {
     var errorDescription: String? { message }
 }
 
+@MainActor
 final class APIClient {
     static let shared = APIClient()
 
@@ -62,6 +63,18 @@ final class APIClient {
         }
         let request = try buildRequest(path: path, method: method, body: nil, requiresAuth: requiresAuth)
         return try await executeData(request: request, retryOnAuth: requiresAuth)
+    }
+
+    func requestResponse(
+        _ path: String,
+        method: String = "GET",
+        requiresAuth: Bool = true
+    ) async throws -> (Data, HTTPURLResponse) {
+        if requiresAuth && auth.shouldRefreshSoon() {
+            try await refreshTokensIfPossible()
+        }
+        let request = try buildRequest(path: path, method: method, body: nil, requiresAuth: requiresAuth)
+        return try await executeResponse(request: request, retryOnAuth: requiresAuth)
     }
 
     func uploadMultipart(
@@ -150,6 +163,14 @@ final class APIClient {
         request: URLRequest,
         retryOnAuth: Bool
     ) async throws -> Data {
+        let (data, _) = try await executeResponse(request: request, retryOnAuth: retryOnAuth)
+        return data
+    }
+
+    private func executeResponse(
+        request: URLRequest,
+        retryOnAuth: Bool
+    ) async throws -> (Data, HTTPURLResponse) {
         let (data, response) = try await URLSession.shared.data(for: request)
         if let http = response as? HTTPURLResponse, http.statusCode == 401, retryOnAuth {
             try await refreshTokensIfPossible()
@@ -158,11 +179,12 @@ final class APIClient {
                 retry.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
             }
             let (retryData, retryResponse) = try await URLSession.shared.data(for: retry)
-            _ = try decodeResponse(data: retryData, response: retryResponse, decodeTo: EmptyResponse.self)
-            return retryData
+            let http = try validatedHTTPResponse(data: retryData, response: retryResponse)
+            return (retryData, http)
         }
-        _ = try decodeResponse(data: data, response: response, decodeTo: EmptyResponse.self)
-        return data
+
+        let http = try validatedHTTPResponse(data: data, response: response)
+        return (data, http)
     }
 
     private func decodeResponse<T: Decodable>(
@@ -170,19 +192,27 @@ final class APIClient {
         response: URLResponse,
         decodeTo: T.Type
     ) throws -> T {
+        _ = try validatedHTTPResponse(data: data, response: response)
+        if T.self == EmptyResponse.self {
+            return EmptyResponse() as! T
+        }
+        return try decoder.decode(T.self, from: data)
+    }
+
+    private func validatedHTTPResponse(
+        data: Data,
+        response: URLResponse
+    ) throws -> HTTPURLResponse {
         guard let http = response as? HTTPURLResponse else {
             throw APIClientError(statusCode: 0, code: "NO_RESPONSE", message: "No response")
         }
-        if (200...299).contains(http.statusCode) {
-            if T.self == EmptyResponse.self {
-                return EmptyResponse() as! T
+        guard (200...299).contains(http.statusCode) else {
+            if let apiError = try? decoder.decode(ApiErrorEnvelope.self, from: data) {
+                throw APIClientError(statusCode: http.statusCode, code: apiError.error.code, message: apiError.error.message)
             }
-            return try decoder.decode(T.self, from: data)
+            throw APIClientError(statusCode: http.statusCode, code: "HTTP_\(http.statusCode)", message: "HTTP \(http.statusCode)")
         }
-        if let apiError = try? decoder.decode(ApiErrorEnvelope.self, from: data) {
-            throw APIClientError(statusCode: http.statusCode, code: apiError.error.code, message: apiError.error.message)
-        }
-        throw APIClientError(statusCode: http.statusCode, code: "HTTP_\(http.statusCode)", message: "HTTP \(http.statusCode)")
+        return http
     }
 
     private func refreshTokensIfPossible() async throws {

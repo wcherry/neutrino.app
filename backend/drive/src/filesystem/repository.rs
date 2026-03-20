@@ -216,8 +216,13 @@ impl FilesystemRepository {
         }
 
         if let Some(starred) = is_starred {
+            let starred_at: Option<chrono::NaiveDateTime> = if starred { Some(now) } else { None };
             diesel::update(base)
-                .set((files::is_starred.eq(starred), files::updated_at.eq(now)))
+                .set((
+                    files::is_starred.eq(starred),
+                    files::starred_at.eq(starred_at),
+                    files::updated_at.eq(now),
+                ))
                 .execute(&mut conn)
                 .map_err(|e| {
                     tracing::error!("DB update file star error: {:?}", e);
@@ -744,6 +749,38 @@ impl FilesystemRepository {
             .load(&mut conn)
             .map_err(|e| {
                 tracing::error!("DB find shared folders error: {:?}", e);
+                ApiError::internal("Database error")
+            })
+    }
+
+    // ── Starred (Quick Access) ─────────────────────────────────────────────────
+
+    pub fn list_starred_files(&self, user_id: &str) -> Result<Vec<FileRecord>, ApiError> {
+        let mut conn = self.get_conn()?;
+        files::table
+            .filter(files::user_id.eq(user_id))
+            .filter(files::is_starred.eq(true))
+            .filter(files::deleted_at.is_null())
+            .select(FileRecord::as_select())
+            .order(files::starred_at.desc())
+            .load(&mut conn)
+            .map_err(|e| {
+                tracing::error!("DB list starred files error: {:?}", e);
+                ApiError::internal("Database error")
+            })
+    }
+
+    pub fn list_starred_folders(&self, user_id: &str) -> Result<Vec<FolderRecord>, ApiError> {
+        let mut conn = self.get_conn()?;
+        folders::table
+            .filter(folders::user_id.eq(user_id))
+            .filter(folders::is_starred.eq(true))
+            .filter(folders::deleted_at.is_null())
+            .select(FolderRecord::as_select())
+            .order(folders::starred_at.desc())
+            .load(&mut conn)
+            .map_err(|e| {
+                tracing::error!("DB list starred folders error: {:?}", e);
                 ApiError::internal("Database error")
             })
     }

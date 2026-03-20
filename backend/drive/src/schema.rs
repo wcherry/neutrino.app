@@ -12,6 +12,8 @@ diesel::table! {
         deleted_at -> Nullable<Timestamp>,
         created_at -> Timestamp,
         updated_at -> Timestamp,
+        // Added in migration 021
+        starred_at -> Nullable<Timestamp>,
     }
 }
 
@@ -29,6 +31,11 @@ diesel::table! {
         folder_id -> Nullable<Text>,
         is_starred -> Bool,
         deleted_at -> Nullable<Timestamp>,
+        // Added in migration 020
+        cover_thumbnail -> Nullable<Text>,
+        cover_thumbnail_mime_type -> Nullable<Text>,
+        // Added in migration 021
+        starred_at -> Nullable<Timestamp>,
     }
 }
 
@@ -165,6 +172,73 @@ diesel::table! {
     }
 }
 
+diesel::table! {
+    doc_suggestions (id) {
+        id -> Text,
+        file_id -> Text,
+        user_id -> Text,
+        user_name -> Text,
+        content_json -> Text,
+        status -> Text,
+        created_at -> Timestamp,
+        resolved_at -> Nullable<Timestamp>,
+        resolved_by -> Nullable<Text>,
+    }
+}
+
+diesel::table! {
+    comments (id) {
+        id -> Text,
+        file_id -> Text,
+        user_id -> Text,
+        user_name -> Text,
+        anchor_json -> Nullable<Text>,
+        body -> Text,
+        status -> Text,
+        assignee_id -> Nullable<Text>,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+        resolved_at -> Nullable<Timestamp>,
+        resolved_by -> Nullable<Text>,
+    }
+}
+
+diesel::table! {
+    comment_replies (id) {
+        id -> Text,
+        comment_id -> Text,
+        user_id -> Text,
+        user_name -> Text,
+        body -> Text,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    notifications (id) {
+        id -> Text,
+        recipient_id -> Text,
+        event_type -> Text,
+        payload -> Text,
+        is_read -> Integer,
+        email_sent -> Integer,
+        created_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    file_activity_log (id) {
+        id -> Text,
+        file_id -> Text,
+        user_id -> Text,
+        user_name -> Text,
+        action -> Text,
+        detail_json -> Nullable<Text>,
+        created_at -> Timestamp,
+    }
+}
+
 diesel::joinable!(files -> folders (folder_id));
 diesel::joinable!(shortcuts -> files (target_file_id));
 diesel::joinable!(file_versions -> files (file_id));
@@ -180,4 +254,9 @@ diesel::allow_tables_to_appear_in_same_query!(
     access_requests,
     irm_policies,
     workspace_settings,
+    doc_suggestions,
+    comments,
+    comment_replies,
+    notifications,
+    file_activity_log,
 );

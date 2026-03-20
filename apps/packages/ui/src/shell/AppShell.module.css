@@ -33,6 +33,11 @@
   min-height: 100%;
 }
 
+/* Desktop collapsed sidebar */
+.shell.sidebar-collapsed {
+  grid-template-columns: 52px 1fr;
+}
+
 /* Mobile: collapsed sidebar */
 @media (max-width: 768px) {
   .shell {

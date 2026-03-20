@@ -7,12 +7,16 @@ interface ShellContextValue {
   sidebarOpen: boolean;
   toggleSidebar: () => void;
   closeSidebar: () => void;
+  sidebarCollapsed: boolean;
+  toggleSidebarCollapsed: () => void;
 }
 
 const ShellContext = createContext<ShellContextValue>({
   sidebarOpen: false,
   toggleSidebar: () => {},
   closeSidebar: () => {},
+  sidebarCollapsed: false,
+  toggleSidebarCollapsed: () => {},
 });
 
 export function useShell() {
@@ -28,14 +32,18 @@ export interface AppShellProps {
 
 export function AppShell({ sidebar, topbar, children, className = '' }: AppShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   const toggleSidebar = () => setSidebarOpen((v) => !v);
   const closeSidebar = () => setSidebarOpen(false);
+  const toggleSidebarCollapsed = () => setSidebarCollapsed((v) => !v);
 
-  const shellClasses = [styles.shell, className].filter(Boolean).join(' ');
+  const shellClasses = [styles.shell, sidebarCollapsed ? styles['sidebar-collapsed'] : '', className]
+    .filter(Boolean)
+    .join(' ');
 
   return (
-    <ShellContext.Provider value={{ sidebarOpen, toggleSidebar, closeSidebar }}>
+    <ShellContext.Provider value={{ sidebarOpen, toggleSidebar, closeSidebar, sidebarCollapsed, toggleSidebarCollapsed }}>
       <div className={shellClasses}>
         {/* Sidebar */}
         <div

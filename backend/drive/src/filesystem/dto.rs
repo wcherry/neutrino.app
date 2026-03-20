@@ -70,6 +70,8 @@ pub struct FileResponse {
     pub is_starred: bool,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
+    pub cover_thumbnail: Option<String>,
+    pub cover_thumbnail_mime_type: Option<String>,
 }
 
 impl From<FileRecord> for FileResponse {
@@ -83,6 +85,8 @@ impl From<FileRecord> for FileResponse {
             is_starred: f.is_starred,
             created_at: f.created_at,
             updated_at: f.updated_at,
+            cover_thumbnail: f.cover_thumbnail,
+            cover_thumbnail_mime_type: f.cover_thumbnail_mime_type,
         }
     }
 }
@@ -158,6 +162,15 @@ pub struct BulkTrashRequest {
 #[serde(rename_all = "camelCase")]
 pub struct BulkResult {
     pub affected: usize,
+}
+
+// ── Starred (Quick Access) DTOs ───────────────────────────────────────────────
+
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct StarredContentsResponse {
+    pub files: Vec<FileResponse>,
+    pub folders: Vec<FolderResponse>,
 }
 
 // ── Trash DTOs ────────────────────────────────────────────────────────────────

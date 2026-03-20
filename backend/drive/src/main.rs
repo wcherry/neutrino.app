@@ -9,15 +9,19 @@ use utoipa::OpenApi;
 use utoipa_swagger_ui::{SwaggerUi, Config as SwaggerConfig};
 use actix_cors::Cors;
 mod access_requests;
+mod activity;
+mod comments;
 mod config;
 mod filesystem;
 mod irm;
 mod jobs;
+mod notifications;
 mod permissions;
 mod schema;
 mod common;
 mod sharing;
 mod storage;
+mod suggestions;
 mod workspace;
 
 use crate::access_requests::{
@@ -62,6 +66,26 @@ use crate::workspace::{
     api::{WorkspaceApiDoc, WorkspaceApiState},
     repository::WorkspaceRepository,
     service::WorkspaceService,
+};
+use crate::notifications::{
+    api::NotificationsApiState,
+    repository::NotificationsRepository,
+    service::{NotificationService, SmtpConfig},
+};
+use crate::activity::{
+    api::ActivityApiState,
+    repository::ActivityRepository,
+    service::ActivityService,
+};
+use crate::comments::{
+    api::CommentsApiState,
+    repository::CommentsRepository,
+    service::CommentsService,
+};
+use crate::suggestions::{
+    api::SuggestionsApiState,
+    repository::SuggestionsRepository,
+    service::SuggestionsService,
 };
 
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
@@ -182,10 +206,15 @@ async fn main() -> std::io::Result<()> {
         permissions_service.clone(),
     ));
 
+    // Jobs setup — created here so StorageApiState can enqueue thumbnail jobs on upload.
+    let jobs_repo = Arc::new(JobsRepository::new(pool.clone()));
+    let jobs_service = Arc::new(JobsService::new(jobs_repo, config.storage_path.clone(), config.jobs_per_worker));
+
     let storage_state = web::Data::new(StorageApiState {
         storage_service: storage_service.clone(),
         irm_service: irm_service.clone(),
         permissions_service: permissions_service.clone(),
+        jobs_service: jobs_service.clone(),
     });
 
     // Filesystem setup
@@ -224,11 +253,65 @@ async fn main() -> std::io::Result<()> {
         service: access_requests_service,
     });
 
-    // Jobs setup
-    let jobs_repo = Arc::new(JobsRepository::new(pool.clone()));
-    let jobs_service = Arc::new(JobsService::new(jobs_repo, config.storage_path.clone(), config.jobs_per_worker));
+    // Notifications setup
+    let smtp_config = if let (Ok(host), Ok(port_str), Ok(user_s), Ok(pass), Ok(from)) = (
+        std::env::var("SMTP_HOST"),
+        std::env::var("SMTP_PORT"),
+        std::env::var("SMTP_USER"),
+        std::env::var("SMTP_PASS"),
+        std::env::var("SMTP_FROM"),
+    ) {
+        port_str.parse::<u16>().ok().map(|port| SmtpConfig {
+            host,
+            port,
+            user: user_s,
+            pass,
+            from,
+        })
+    } else {
+        None
+    };
+    let notifications_repo = Arc::new(NotificationsRepository::new(pool.clone()));
+    let notification_service = Arc::new(NotificationService::new(notifications_repo, smtp_config));
+    let notifications_state = web::Data::new(NotificationsApiState {
+        notification_service: notification_service.clone(),
+    });
+
+    // Activity setup
+    let activity_repo = Arc::new(ActivityRepository::new(pool.clone()));
+    let activity_service = Arc::new(ActivityService::new(activity_repo, permissions_service.clone()));
+    let activity_state = web::Data::new(ActivityApiState {
+        activity_service: activity_service.clone(),
+    });
+
+    // Comments setup
+    let comments_repo = Arc::new(CommentsRepository::new(pool.clone()));
+    let comments_service = Arc::new(CommentsService::new(
+        comments_repo,
+        notification_service.clone(),
+        activity_service.clone(),
+        permissions_service.clone(),
+    ));
+    let comments_state = web::Data::new(CommentsApiState {
+        comments_service,
+    });
+
+    // Suggestions setup
+    let suggestions_repo = Arc::new(SuggestionsRepository::new(pool.clone()));
+    let suggestions_service = Arc::new(SuggestionsService::new(
+        suggestions_repo,
+        notification_service.clone(),
+        activity_service.clone(),
+        permissions_service.clone(),
+    ));
+    let suggestions_state = web::Data::new(SuggestionsApiState {
+        suggestions_service,
+    });
+
+    // Jobs state (jobs_service created above near storage setup)
     let jobs_state = web::Data::new(JobsApiState {
         jobs_service: jobs_service.clone(),
+        storage_service: storage_service.clone(),
     });
     let worker_secret_data = web::Data::new(WorkerSecretData(config.worker_secret.clone()));
 
@@ -278,6 +361,10 @@ async fn main() -> std::io::Result<()> {
             .app_data(jobs_state.clone())
             .app_data(worker_secret_data.clone())
             .app_data(token_service_data.clone())
+            .app_data(notifications_state.clone())
+            .app_data(activity_state.clone())
+            .app_data(comments_state.clone())
+            .app_data(suggestions_state.clone())
             .wrap(Logger::default())
             .wrap(Cors::permissive())
             .service(health)
@@ -288,7 +375,11 @@ async fn main() -> std::io::Result<()> {
                     .configure(permissions::api::configure)
                     .configure(sharing::api::configure_drive)
                     .configure(access_requests::api::configure)
-                    .configure(irm::api::configure),
+                    .configure(irm::api::configure)
+                    .configure(comments::api::configure)
+                    .configure(suggestions::api::configure)
+                    .configure(activity::api::configure)
+                    .configure(notifications::api::configure),
             )
             .service(
                 web::scope("/api/v1")

@@ -35,6 +35,9 @@ export interface GridItem {
   /** Formatted modified date for list view */
   modifiedText?: string;
   isStarred?: boolean;
+  /** Base64-encoded cover thumbnail, shown in grid cards when available */
+  coverThumbnail?: string | null;
+  coverThumbnailMimeType?: string | null;
 }
 
 const FILTER_CHIPS: { key: FilterType; label: string }[] = [
@@ -86,6 +89,8 @@ export interface FileGridProps {
   onItemClick: (item: GridItem) => void;
   /** If provided, a three-dot menu button appears on hover */
   onItemMenuOpen?: (item: GridItem, e: React.MouseEvent) => void;
+  /** If provided, the star badge is clickable and calls this handler */
+  onToggleStar?: (item: GridItem) => void;
   /** Show type-filter chips above the grid (default: false) */
   showFilter?: boolean;
   /** Show Size column and Size sort option (default: true) */
@@ -104,6 +109,7 @@ export function FileGrid({
   emptyState,
   onItemClick,
   onItemMenuOpen,
+  onToggleStar,
   showFilter = false,
   showSizeColumn = true,
   sortBy,
@@ -200,7 +206,11 @@ export function FileGrid({
       ) : viewMode === 'large' ? (
         /* ── Large grid ── */
         <div className={styles['grid-large']} role="list">
-          {filteredItems.map((item) => (
+          {filteredItems.map((item) => {
+            const thumbSrc = item.coverThumbnail && item.coverThumbnailMimeType
+              ? `data:${item.coverThumbnailMimeType};base64,${item.coverThumbnail}`
+              : null;
+            return (
             <Card
               key={item.id}
               hoverable
@@ -212,7 +222,24 @@ export function FileGrid({
               onClick={() => onItemClick(item)}
             >
               <div className={styles['preview-large']} style={{ color: item.iconColor }}>
-                <item.icon size={48} strokeWidth={1} />
+                {thumbSrc
+                  ? <img src={thumbSrc} alt={item.name} className={styles['preview-thumb']} loading="lazy" />
+                  : <item.icon size={48} strokeWidth={1} />
+                }
+                <button
+                  type="button"
+                  className={styles['star-badge']}
+                  data-starred={item.isStarred ? 'true' : undefined}
+                  aria-label={item.isStarred ? 'Remove from starred' : 'Add to starred'}
+                  onClick={onToggleStar ? (e) => { e.stopPropagation(); onToggleStar(item); } : undefined}
+                  style={onToggleStar ? undefined : { pointerEvents: 'none' }}
+                >
+                  <Star
+                    size={14}
+                    style={{ color: item.isStarred ? 'var(--color-amber, #d97706)' : 'var(--color-text-muted)' }}
+                    fill={item.isStarred ? 'var(--color-amber, #d97706)' : 'none'}
+                  />
+                </button>
               </div>
               <div className={styles['card-large-body']}>
                 <Text size="sm" weight="medium" truncate>{item.name}</Text>
@@ -229,12 +256,16 @@ export function FileGrid({
                 </button>
               )}
             </Card>
-          ))}
+          ); })}
         </div>
       ) : viewMode === 'small' ? (
         /* ── Small grid ── */
         <div className={styles['grid-small']} role="list">
-          {filteredItems.map((item) => (
+          {filteredItems.map((item) => {
+            const thumbSrc = item.coverThumbnail && item.coverThumbnailMimeType
+              ? `data:${item.coverThumbnailMimeType};base64,${item.coverThumbnail}`
+              : null;
+            return (
             <Card
               key={item.id}
               hoverable
@@ -246,7 +277,24 @@ export function FileGrid({
               onClick={() => onItemClick(item)}
             >
               <div className={styles['preview-small']} style={{ color: item.iconColor }}>
-                <item.icon size={28} strokeWidth={1.25} />
+                {thumbSrc
+                  ? <img src={thumbSrc} alt={item.name} className={styles['preview-thumb']} loading="lazy" />
+                  : <item.icon size={28} strokeWidth={1.25} />
+                }
+                <button
+                  type="button"
+                  className={styles['star-badge']}
+                  data-starred={item.isStarred ? 'true' : undefined}
+                  aria-label={item.isStarred ? 'Remove from starred' : 'Add to starred'}
+                  onClick={onToggleStar ? (e) => { e.stopPropagation(); onToggleStar(item); } : undefined}
+                  style={onToggleStar ? undefined : { pointerEvents: 'none' }}
+                >
+                  <Star
+                    size={12}
+                    style={{ color: item.isStarred ? 'var(--color-amber, #d97706)' : 'var(--color-text-muted)' }}
+                    fill={item.isStarred ? 'var(--color-amber, #d97706)' : 'none'}
+                  />
+                </button>
               </div>
               <div className={styles['card-small-body']}>
                 <Text size="xs" weight="medium" truncate>{item.name}</Text>
@@ -262,7 +310,7 @@ export function FileGrid({
                 </button>
               )}
             </Card>
-          ))}
+          ); })}
         </div>
       ) : (
         /* ── Detailed list ── */
@@ -298,7 +346,11 @@ export function FileGrid({
             <span />
           </div>
           <div role="list">
-            {filteredItems.map((item) => (
+            {filteredItems.map((item) => {
+              const thumbSrc = item.coverThumbnail && item.coverThumbnailMimeType
+                ? `data:${item.coverThumbnailMimeType};base64,${item.coverThumbnail}`
+                : null;
+              return (
               <div
                 key={item.id}
                 className={styles['list-row']}
@@ -310,7 +362,10 @@ export function FileGrid({
               >
                 <div className={styles['list-name']}>
                   <span className={styles['file-icon-sm']} style={{ color: item.iconColor }}>
-                    <item.icon size={18} strokeWidth={1.5} />
+                    {thumbSrc
+                      ? <img src={thumbSrc} alt="" className={styles['list-thumb']} loading="lazy" />
+                      : <item.icon size={18} strokeWidth={1.5} />
+                    }
                   </span>
                   <Text size="sm" truncate>{item.name}</Text>
                   {item.isStarred && <Star size={12} style={{ color: 'var(--color-amber, #d97706)', flexShrink: 0 }} />}
@@ -329,7 +384,7 @@ export function FileGrid({
                   </button>
                 ) : <span />}
               </div>
-            ))}
+              ); })}
           </div>
         </div>
       )}

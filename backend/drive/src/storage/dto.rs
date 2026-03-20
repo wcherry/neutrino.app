@@ -40,6 +40,8 @@ pub struct FileMetadataResponse {
     pub is_starred: bool,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
+    pub cover_thumbnail: Option<String>,
+    pub cover_thumbnail_mime_type: Option<String>,
 }
 
 impl From<FileRecord> for FileMetadataResponse {
@@ -53,6 +55,8 @@ impl From<FileRecord> for FileMetadataResponse {
             is_starred: f.is_starred,
             created_at: f.created_at,
             updated_at: f.updated_at,
+            cover_thumbnail: f.cover_thumbnail,
+            cover_thumbnail_mime_type: f.cover_thumbnail_mime_type,
         }
     }
 }
@@ -143,6 +147,7 @@ pub struct QuotaResponse {
 pub struct DocFileMetadataResponse {
     pub id: String,
     pub name: String,
+    pub size_bytes: i64,
     pub folder_id: Option<String>,
     pub deleted_at: Option<NaiveDateTime>,
     pub your_role: String,
@@ -150,4 +155,6 @@ pub struct DocFileMetadataResponse {
     pub mime_type: Option<String>,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
+    pub cover_thumbnail: Option<String>,
+    pub cover_thumbnail_mime_type: Option<String>,
 }

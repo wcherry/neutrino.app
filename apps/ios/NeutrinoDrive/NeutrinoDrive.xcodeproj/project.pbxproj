@@ -31,6 +31,7 @@
 		A10000000000000000000016 /* SyncManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000018 /* SyncManager.swift */; };
 		A10000000000000000000017 /* BiometricManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000019 /* BiometricManager.swift */; };
 		A10000000000000000000018 /* LockView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000001A /* LockView.swift */; };
+		A10000000000000000000019 /* HelpView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000001B /* HelpView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -60,6 +61,7 @@
 		A20000000000000000000018 /* SyncManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncManager.swift; sourceTree = "<group>"; };
 		A20000000000000000000019 /* BiometricManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BiometricManager.swift; sourceTree = "<group>"; };
 		A2000000000000000000001A /* LockView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LockView.swift; sourceTree = "<group>"; };
+		A2000000000000000000001B /* HelpView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelpView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -116,6 +118,7 @@
 			children = (
 				A40000000000000000000006 /* Auth */,
 				A40000000000000000000007 /* Drive */,
+				A4000000000000000000000C /* Help */,
 				A40000000000000000000008 /* Settings */,
 			);
 			path = Views;
@@ -173,6 +176,14 @@
 				A20000000000000000000019 /* BiometricManager.swift */,
 			);
 			path = Security;
+			sourceTree = "<group>";
+		};
+		A4000000000000000000000C /* Help */ = {
+			isa = PBXGroup;
+			children = (
+				A2000000000000000000001B /* HelpView.swift */,
+			);
+			path = Help;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -261,6 +272,7 @@
 				A1000000000000000000000B /* DriveHomeView.swift in Sources */,
 				A1000000000000000000000C /* FileRowView.swift in Sources */,
 				A1000000000000000000000D /* FolderRowView.swift in Sources */,
+				A10000000000000000000019 /* HelpView.swift in Sources */,
 				A1000000000000000000000E /* OfflineFileRowView.swift in Sources */,
 				A1000000000000000000000F /* QuickLookView.swift in Sources */,
 				A10000000000000000000010 /* ShareSheet.swift in Sources */,

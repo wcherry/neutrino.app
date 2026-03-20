@@ -1,6 +1,7 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import type { Editor } from '@tiptap/react';
 import styles from './page.module.css';
 
@@ -44,42 +45,75 @@ function scrollToHeading(editor: Editor, text: string, level: number) {
   });
 }
 
+const INDENT_CLASS: Record<number, string> = {
+  1: '',
+  2: styles.outlineItemH2,
+  3: styles.outlineItemH3,
+  4: styles.outlineItemH4,
+};
+
 export function DocOutline({ editor }: DocOutlineProps) {
+  const [collapsed, setCollapsed] = useState(false);
+
   if (!editor) return null;
 
   const items = getOutlineItems(editor);
 
-  if (items.length === 0) {
+  if (collapsed) {
     return (
-      <div className={styles.outlinePanel}>
-        <div className={styles.outlineTitle}>Outline</div>
-        <div style={{ padding: '8px 16px', fontSize: 12, color: 'var(--color-text-muted, #5f6368)' }}>
-          Add headings to see an outline.
-        </div>
+      <div className={styles.outlinePanelCollapsed}>
+        <button
+          className={styles.outlineExpandBtn}
+          onClick={() => setCollapsed(false)}
+          title="Expand outline"
+        >
+          <ChevronRight size={14} />
+        </button>
+        {items.map((item, idx) => (
+          <button
+            key={idx}
+            className={styles.outlineIconBtn}
+            onClick={() => scrollToHeading(editor, item.text, item.level)}
+            title={item.text}
+          >
+            <span className={styles.outlineIconBadge} style={{ paddingLeft: (item.level - 1) * 3 }}>
+              H{item.level}
+            </span>
+          </button>
+        ))}
       </div>
     );
   }
 
-  const indentClass: Record<number, string> = {
-    1: '',
-    2: styles.outlineItemH2,
-    3: styles.outlineItemH3,
-    4: styles.outlineItemH4,
-  };
-
   return (
     <div className={styles.outlinePanel}>
-      <div className={styles.outlineTitle}>Outline</div>
-      {items.map((item, idx) => (
+      <div className={styles.outlineTitleRow}>
+        <span className={styles.outlineTitle}>Outline</span>
         <button
-          key={idx}
-          className={`${styles.outlineItem} ${indentClass[Math.min(item.level, 4)] ?? styles.outlineItemH4}`}
-          onClick={() => scrollToHeading(editor, item.text, item.level)}
-          title={item.text}
+          className={styles.outlineExpandBtn}
+          onClick={() => setCollapsed(true)}
+          title="Collapse outline"
         >
-          {item.text}
+          <ChevronLeft size={14} />
         </button>
-      ))}
+      </div>
+
+      {items.length === 0 ? (
+        <div className={styles.outlineEmpty}>
+          Add headings to see an outline.
+        </div>
+      ) : (
+        items.map((item, idx) => (
+          <button
+            key={idx}
+            className={`${styles.outlineItem} ${INDENT_CLASS[Math.min(item.level, 4)] ?? styles.outlineItemH4}`}
+            onClick={() => scrollToHeading(editor, item.text, item.level)}
+            title={item.text}
+          >
+            {item.text}
+          </button>
+        ))
+      )}
     </div>
   );
 }

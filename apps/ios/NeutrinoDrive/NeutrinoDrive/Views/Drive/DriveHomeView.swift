@@ -23,7 +23,7 @@ struct DriveFolderView: View {
     @State private var showCreateFolder = false
     @State private var newFolderName = ""
     @State private var errorMessage: String?
-    @State private var previewURL: URL?
+    @State private var previewItem: DrivePreviewItem?
     @State private var sharingItem: ShareItem?
     @State private var isLoading = false
 
@@ -47,16 +47,17 @@ struct DriveFolderView: View {
             Section(filter == .offline ? "Offline Files" : "Files") {
                 if filter == .offline {
                     if offlineItems.isEmpty {
-                        Text("No offline files")
+                        Text("No files marked available offline")
                             .foregroundColor(.secondary)
                     } else {
                         ForEach(offlineItems, id: \.id) { cached in
                             OfflineFileRowView(item: cached)
                                 .contextMenu {
-                                    Button("Preview") { previewURL = URL(fileURLWithPath: cached.localPath) }
+                                    Button("Preview") { openOfflinePreview(cached) }
+                                    Button("Share") { sharingItem = ShareItem(items: [URL(fileURLWithPath: cached.localPath)]) }
                                     Button("Remove Offline") { cache.remove(fileId: cached.id) }
                                 }
-                                .onTapGesture { previewURL = URL(fileURLWithPath: cached.localPath) }
+                                .onTapGesture { openOfflinePreview(cached) }
                         }
                     }
                 } else {
@@ -65,7 +66,7 @@ struct DriveFolderView: View {
                             .foregroundColor(.secondary)
                     } else {
                         ForEach(filteredFiles) { file in
-                            FileRowView(file: file, cached: cache.localURL(for: file.id) != nil)
+                            FileRowView(file: file, availableOffline: cache.isAvailableOffline(fileId: file.id))
                                 .contextMenu {
                                     Button("Preview") {
                                         openFile(file)
@@ -73,7 +74,7 @@ struct DriveFolderView: View {
                                     Button(file.isStarred ? "Unstar" : "Star") {
                                         Task { await toggleStar(file) }
                                     }
-                                    Button(cache.localURL(for: file.id) != nil ? "Remove Offline" : "Download for Offline") {
+                                    Button(cache.isAvailableOffline(fileId: file.id) ? "Remove Offline" : "Download for Offline") {
                                         Task { await toggleOffline(file) }
                                     }
                                     Button("Share") {
@@ -86,7 +87,7 @@ struct DriveFolderView: View {
                 }
             }
         }
-        .navigationTitle(title)
+        .navigationTitle(filter == .offline ? "Available Offline" : title)
         .navigationDestination(for: FolderItem.self) { folder in
             DriveFolderView(folderId: folder.id, title: folder.name)
         }
@@ -107,6 +108,7 @@ struct DriveFolderView: View {
                     Button("Upload", systemImage: "arrow.up.circle") { showImporter = true }
                     Button("New Folder", systemImage: "folder.badge.plus") { showCreateFolder = true }
                     Button("Refresh", systemImage: "arrow.clockwise") { Task { await reload() } }
+                    NavigationLink("Help", destination: HelpView())
                     NavigationLink("Settings", destination: SettingsView())
                 } label: {
                     Image(systemName: "ellipsis.circle")
@@ -123,8 +125,13 @@ struct DriveFolderView: View {
         .sheet(item: $sharingItem) { item in
             ShareSheet(activityItems: item.items)
         }
-        .sheet(item: Binding(get: { previewURL.map { PreviewItem(url: $0) } }, set: { _ in previewURL = nil })) { item in
-            QuickLookView(url: item.url)
+        .sheet(item: $previewItem) { item in
+            switch item.content {
+            case .file(let url):
+                QuickLookView(url: url)
+            case .neutrino(let payload):
+                NeutrinoEditorPreviewView(payload: payload)
+            }
         }
         .alert("Error", isPresented: Binding(get: { errorMessage != nil }, set: { _ in errorMessage = nil })) {
             Button("OK", role: .cancel) {}
@@ -164,7 +171,7 @@ struct DriveFolderView: View {
     }
 
     private var offlineItems: [CachedFile] {
-        cache.index.values.sorted { $0.lastAccessed > $1.lastAccessed }
+        cache.offlineFiles()
     }
 
     private func reload() async {
@@ -181,7 +188,7 @@ struct DriveFolderView: View {
             files = response.files
         } catch {
             errorMessage = error.localizedDescription
-            NSLog("Error MSG: %@", error.localizedDescription ?? "Unknown error")
+            NSLog("Error loading drive contents: %@", error.localizedDescription)
         }
         isLoading = false
     }
@@ -208,10 +215,32 @@ struct DriveFolderView: View {
     private func openFile(_ file: FileItem) {
         Task {
             do {
-                let url = try await drive.downloadFile(file)
-                previewURL = url
+                if let payload = try await drive.loadNeutrinoPreview(file: file) {
+                    previewItem = DrivePreviewItem(content: .neutrino(payload))
+                } else {
+                    let url = try await drive.downloadFile(file)
+                    previewItem = DrivePreviewItem(content: .file(url))
+                }
             } catch {
                 errorMessage = error.localizedDescription
+            }
+        }
+    }
+
+    private func openOfflinePreview(_ item: CachedFile) {
+        Task {
+            let resolved = await drive.prepareOfflineFileForPreview(item)
+
+            if let kind = NeutrinoPreviewKind.from(mimeType: resolved.mimeType) {
+                do {
+                    let content = try loadPreviewText(at: URL(fileURLWithPath: resolved.localPath))
+                    let payload = NeutrinoPreviewPayload(title: resolved.name, kind: kind, content: content)
+                    previewItem = DrivePreviewItem(content: .neutrino(payload))
+                } catch {
+                    errorMessage = error.localizedDescription
+                }
+            } else {
+                previewItem = DrivePreviewItem(content: .file(URL(fileURLWithPath: resolved.localPath)))
             }
         }
     }
@@ -226,12 +255,12 @@ struct DriveFolderView: View {
     }
 
     private func toggleOffline(_ file: FileItem) async {
-        if cache.localURL(for: file.id) != nil {
+        if cache.isAvailableOffline(fileId: file.id) {
             cache.remove(fileId: file.id)
             return
         }
         do {
-            _ = try await drive.downloadFile(file)
+            _ = try await drive.downloadFile(file, makeAvailableOffline: true)
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -260,6 +289,21 @@ struct DriveFolderView: View {
             errorMessage = error.localizedDescription
         }
     }
+
+    private func loadPreviewText(at url: URL) throws -> String {
+        let data = try Data(contentsOf: url)
+
+        if let text = String(data: data, encoding: .utf8) {
+            return text
+        }
+        if let text = String(data: data, encoding: .utf16) {
+            return text
+        }
+        if let text = String(data: data, encoding: .ascii) {
+            return text
+        }
+        return ""
+    }
 }
 
 enum DriveFilter: Hashable {
@@ -268,9 +312,14 @@ enum DriveFilter: Hashable {
     case starred
 }
 
-struct PreviewItem: Identifiable {
+enum DrivePreviewContent {
+    case file(URL)
+    case neutrino(NeutrinoPreviewPayload)
+}
+
+struct DrivePreviewItem: Identifiable {
     let id = UUID()
-    let url: URL
+    let content: DrivePreviewContent
 }
 
 struct ShareItem: Identifiable {

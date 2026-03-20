@@ -2,7 +2,7 @@ import SwiftUI
 
 struct FileRowView: View {
     let file: FileItem
-    let cached: Bool
+    let availableOffline: Bool
 
     var body: some View {
         HStack(spacing: 12) {
@@ -22,7 +22,7 @@ struct FileRowView: View {
                 Image(systemName: "star.fill")
                     .foregroundColor(.yellow)
             }
-            if cached {
+            if availableOffline {
                 Image(systemName: "arrow.down.circle.fill")
                     .foregroundColor(.green)
             }

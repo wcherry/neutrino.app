@@ -79,6 +79,8 @@ export interface FileItem {
   isStarred: boolean;
   createdAt: string;
   updatedAt: string;
+  coverThumbnail: string | null;
+  coverThumbnailMimeType: string | null;
 }
 
 export interface FileListQuery {
@@ -158,6 +160,11 @@ export interface FolderContentsResponse {
   shortcuts: unknown[];
 }
 
+export interface StarredContentsResponse {
+  files: FileItem[];
+  folders: Folder[];
+}
+
 export interface FolderCreateRequest {
   name: string;
   parentId?: string;
@@ -166,6 +173,7 @@ export interface FolderCreateRequest {
 export interface FolderUpdateRequest {
   name?: string;
   parentId?: string;
+  isStarred?: boolean;
 }
 
 export interface FileUpdateRequest {
@@ -592,6 +600,10 @@ export const storageApi = {
 
 export const filesystemApi = {
   // Folder contents (primary navigation)
+  async getStarred(limit = 5): Promise<StarredContentsResponse> {
+    return request<StarredContentsResponse>(`/api/v1/drive/starred?limit=${limit}`);
+  },
+
   async getRootContents(query: FileListQuery = {}): Promise<FolderContentsResponse> {
     const { limit = 200, offset = 0, orderBy, direction } = query;
     const qs = buildQuery({ limit, offset, orderBy, direction });
@@ -996,7 +1008,7 @@ export interface PageSetup {
   marginLeft: number;
   marginRight: number;
   orientation: 'portrait' | 'landscape';
-  pageSize: 'letter' | 'a4' | 'legal';
+  pageSize: 'letter' | 'a4' | 'legal' | 'a3' | 'a5' | 'tabloid' | 'executive';
 }
 
 export interface DocResponse {
@@ -1542,6 +1554,98 @@ export const albumsApi = {
 
   async removePhoto(albumId: string, photoId: string): Promise<void> {
     return request<void>(`/api/v1/albums/${albumId}/items/${photoId}`, { method: 'DELETE' });
+  },
+};
+
+// ---------------------------------------------------------------------------
+// Comments types
+// ---------------------------------------------------------------------------
+
+export interface CommentReply {
+  id: string;
+  commentId: string;
+  userId: string;
+  userName: string;
+  body: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Comment {
+  id: string;
+  fileId: string;
+  userId: string;
+  userName: string;
+  anchorJson: string | null;
+  body: string;
+  status: 'open' | 'resolved';
+  assigneeId: string | null;
+  createdAt: string;
+  updatedAt: string;
+  resolvedAt: string | null;
+  resolvedBy: string | null;
+  replies: CommentReply[];
+}
+
+export interface CommentListResponse {
+  comments: Comment[];
+  total: number;
+}
+
+// ---------------------------------------------------------------------------
+// Comments API
+// ---------------------------------------------------------------------------
+
+export const commentsApi = {
+  async listComments(fileId: string, status?: 'open' | 'resolved'): Promise<CommentListResponse> {
+    const qs = status ? `?status=${status}` : '';
+    return request<CommentListResponse>(`/api/v1/drive/files/${fileId}/comments${qs}`);
+  },
+
+  async createComment(
+    fileId: string,
+    body: string,
+    anchorJson?: string,
+    assigneeId?: string,
+  ): Promise<Comment> {
+    return request<Comment>(`/api/v1/drive/files/${fileId}/comments`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ body, anchorJson, assigneeId }),
+    });
+  },
+
+  async updateComment(
+    fileId: string,
+    commentId: string,
+    patch: { body?: string; status?: string },
+  ): Promise<Comment> {
+    return request<Comment>(`/api/v1/drive/files/${fileId}/comments/${commentId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch),
+    });
+  },
+
+  async deleteComment(fileId: string, commentId: string): Promise<void> {
+    return request<void>(`/api/v1/drive/files/${fileId}/comments/${commentId}`, {
+      method: 'DELETE',
+    });
+  },
+
+  async addReply(fileId: string, commentId: string, body: string): Promise<CommentReply> {
+    return request<CommentReply>(`/api/v1/drive/files/${fileId}/comments/${commentId}/replies`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ body }),
+    });
+  },
+
+  async deleteReply(fileId: string, commentId: string, replyId: string): Promise<void> {
+    return request<void>(
+      `/api/v1/drive/files/${fileId}/comments/${commentId}/replies/${replyId}`,
+      { method: 'DELETE' },
+    );
   },
 };
 

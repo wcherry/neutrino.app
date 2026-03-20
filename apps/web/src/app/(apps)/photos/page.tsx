@@ -231,6 +231,8 @@ export default function PhotosPage() {
       isStarred: photo.isStarred,
       createdAt: photo.createdAt,
       updatedAt: photo.updatedAt,
+      coverThumbnail: photo.thumbnail,
+      coverThumbnailMimeType: photo.thumbnailMimeType,
     });
   }
 

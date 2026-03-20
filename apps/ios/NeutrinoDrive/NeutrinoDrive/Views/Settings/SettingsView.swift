@@ -1,12 +1,12 @@
 import SwiftUI
 import UniformTypeIdentifiers
-import LocalAuthentication
 
 struct SettingsView: View {
     @EnvironmentObject private var settings: AppSettings
     @EnvironmentObject private var auth: AuthManager
     @EnvironmentObject private var drive: DriveService
     @EnvironmentObject private var sync: SyncManager
+    @EnvironmentObject private var biometrics: BiometricManager
 
     @State private var baseUrl = ""
     @State private var showConfirm = false
@@ -30,8 +30,17 @@ struct SettingsView: View {
                     Text(profile.email)
                     Text(profile.name)
                 }
-                Toggle("Face/Touch ID", isOn: $settings.biometricEnabled)
+                Toggle(biometrics.biometryDisplayName, isOn: biometricBinding)
                     .disabled(!biometricsAvailable)
+                if biometricsAvailable {
+                    Text("Use \(biometrics.biometryDisplayName) to unlock Neutrino Drive when you return to the app.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                } else {
+                    Text(unavailableBiometricsMessage)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
                 Button("Sign Out", role: .destructive) {
                     Task { await drive.logout() }
                 }
@@ -69,9 +78,16 @@ struct SettingsView: View {
                         .foregroundColor(.secondary)
                 }
             }
+
+            Section("Support") {
+                NavigationLink("Help", destination: HelpView())
+            }
         }
         .navigationTitle("Settings")
-        .onAppear { baseUrl = settings.baseUrl }
+        .onAppear {
+            baseUrl = settings.baseUrl
+            _ = biometrics.refreshAvailability()
+        }
         .fileImporter(isPresented: $showFolderPicker, allowedContentTypes: [.folder], allowsMultipleSelection: false) { result in
             switch result {
             case .success(let urls):
@@ -109,9 +125,44 @@ struct SettingsView: View {
     }
 
     private var biometricsAvailable: Bool {
-        let context = LAContext()
-        var error: NSError?
-        return context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error)
+        biometrics.isAvailable
+    }
+
+    private var unavailableBiometricsMessage: String {
+        biometrics.lastError ?? "Set up Face ID or Touch ID on this device to enable app unlock."
+    }
+
+    private var biometricBinding: Binding<Bool> {
+        Binding(
+            get: { settings.biometricEnabled },
+            set: { isEnabled in
+                if isEnabled {
+                    Task { await enableBiometrics() }
+                } else {
+                    settings.biometricEnabled = false
+                    biometrics.clearError()
+                    biometrics.setUnlocked(true)
+                }
+            }
+        )
+    }
+
+    private func enableBiometrics() async {
+        guard biometrics.refreshAvailability() else {
+            errorMessage = unavailableBiometricsMessage
+            settings.biometricEnabled = false
+            return
+        }
+
+        let didAuthenticate = await biometrics.authenticate(reason: "Enable \(biometrics.biometryDisplayName) for Neutrino Drive")
+        if didAuthenticate {
+            settings.biometricEnabled = true
+            biometrics.setUnlocked(true)
+            biometrics.clearError()
+        } else {
+            settings.biometricEnabled = false
+            errorMessage = biometrics.lastError ?? "Unable to enable \(biometrics.biometryDisplayName)."
+        }
     }
 
     private func normalizeBaseURL(_ input: String) -> String {

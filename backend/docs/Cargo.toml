@@ -24,3 +24,7 @@ thiserror = "1"
 libsqlite3-sys = { version = "0.27", features = ["bundled"] }
 reqwest = { version = "0.12", features = ["json", "multipart"] }
 tracing = "0.1.44"
+actix-ws = "0.3"
+futures-util = "0.3"
+yrs = "0.22"
+dashmap = "6"

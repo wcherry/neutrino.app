@@ -2,7 +2,7 @@ use chrono::NaiveDateTime;
 use diesel::prelude::*;
 
 #[allow(dead_code)]
-#[derive(Debug, Queryable, Selectable)]
+#[derive(Debug, Clone, Queryable, Selectable)]
 #[diesel(table_name = crate::schema::files)]
 #[diesel(check_for_backend(diesel::sqlite::Sqlite))]
 pub struct FileRecord {
@@ -17,6 +17,9 @@ pub struct FileRecord {
     pub folder_id: Option<String>,
     pub is_starred: bool,
     pub deleted_at: Option<NaiveDateTime>,
+    pub cover_thumbnail: Option<String>,
+    pub cover_thumbnail_mime_type: Option<String>,
+    pub starred_at: Option<NaiveDateTime>,
 }
 
 #[derive(Debug, Insertable)]

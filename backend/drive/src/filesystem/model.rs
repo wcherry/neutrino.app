@@ -17,6 +17,7 @@ pub struct FolderRecord {
     pub deleted_at: Option<NaiveDateTime>,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
+    pub starred_at: Option<NaiveDateTime>,
 }
 
 #[derive(Debug, Insertable)]
@@ -34,6 +35,7 @@ pub struct UpdateFolderRecord {
     pub name: Option<String>,
     pub color: Option<Option<String>>,
     pub is_starred: Option<bool>,
+    pub starred_at: Option<Option<NaiveDateTime>>,
     pub parent_id: Option<Option<String>>,
     pub updated_at: NaiveDateTime,
 }

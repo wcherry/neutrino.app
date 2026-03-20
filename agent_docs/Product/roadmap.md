@@ -176,34 +176,34 @@ A phased roadmap for building a Google Drive-competitive cloud storage and colla
 **Goal:** Multiple users can work in the same file simultaneously, with visibility and commenting.
 
 ### 4.1 Real-Time Co-Editing
-- [ ] Operational transform or CRDT-based conflict-free editing engine
-- [ ] Live cursors: show each collaborator's cursor position with name label
-- [ ] Merge concurrent edits without conflicts
-- [ ] Presence indicators (avatars of active collaborators)
-- [ ] In-editor chat sidebar (visible while a file is open by 2+ people)
+- [x] Operational transform or CRDT-based conflict-free editing engine
+- [x] Live cursors: show each collaborator's cursor position with name label
+- [x] Merge concurrent edits without conflicts
+- [x] Presence indicators (avatars of active collaborators)
+- [x] In-editor chat sidebar (visible while a file is open by 2+ people)
 
 ### 4.2 Comments & Mentions
-- [ ] Add comment threads on text (Docs), cells (Sheets), objects (Slides)
-- [ ] Reply to comments, resolve threads
-- [ ] @mention a collaborator in a comment (triggers email notification)
-- [ ] Assign action items from comments
-- [ ] Comment history (chronological view of all comment threads)
+- [x] Add comment threads on text (Docs), cells (Sheets), objects (Slides)
+- [x] Reply to comments, resolve threads
+- [x] @mention a collaborator in a comment (triggers email notification)
+- [x] Assign action items from comments
+- [x] Comment history (chronological view of all comment threads)
 
 ### 4.3 Suggestion Mode (Docs)
-- [ ] Toggle "Suggesting" mode — edits become tracked changes
-- [ ] Accept or reject individual suggestions
-- [ ] See who made each suggestion with timestamp
-- [ ] Suggestion count indicator in toolbar
+- [x] Toggle "Suggesting" mode — edits become tracked changes
+- [x] Accept or reject individual suggestions
+- [x] See who made each suggestion with timestamp
+- [x] Suggestion count indicator in toolbar
 
 ### 4.4 Notifications
-- [ ] Email notification for: new comment, reply, @mention, suggestion accepted/rejected
-- [ ] In-app notification center
-- [ ] Push notifications (web) for comment/share activity
+- [x] Email notification for: new comment, reply, @mention, suggestion accepted/rejected
+- [x] In-app notification center
+- [x] Push notifications (web) for comment/share activity
 
 ### 4.5 Activity Dashboard
-- [ ] Per-file activity log: view edits, comments, shares chronologically
-- [ ] Show who viewed the file and when (premium tier)
-- [ ] File activity sidebar accessible from Drive and within editors
+- [x] Per-file activity log: view edits, comments, shares chronologically
+- [x] Show who viewed the file and when (premium tier)
+- [x] File activity sidebar accessible from Drive and within editors
 
 ---
 
@@ -212,19 +212,19 @@ A phased roadmap for building a Google Drive-competitive cloud storage and colla
 **Goal:** Users have native access to Neutrino on desktop OS and mobile devices.
 
 ### 5.1 Mobile App — Drive (Android & iOS)
-- [ ] Browse files and folders (list and grid view)
-- [ ] Upload files from device camera roll or file system
-- [ ] Download files for offline access
-- [ ] Mark files "Available offline" (toggle per file or folder)
-- [ ] Offline filter: view all offline-ready files
-- [ ] Document scanning: use camera to scan paper docs into searchable PDF (OCR)
-- [ ] File preview: images, video, PDF on mobile
-- [ ] Share files via link or email from mobile
-- [ ] Set permissions from mobile share dialog
-- [ ] Open file in external apps ("Open with")
-- [ ] Push notifications: comments, mentions, new shares, access requests
-- [ ] Search Drive with voice input
-- [ ] Biometric login
+- [x] Browse files and folders (list and grid view)
+- [x] Upload files from device camera roll or file system
+- [x] Download files for offline access
+- [x] Mark files "Available offline" (toggle per file or folder)
+- [x] Offline filter: view all offline-ready files
+- [x] Document scanning: use camera to scan paper docs into searchable PDF (OCR)
+- [x] File preview: images, video, PDF on mobile
+- [x] Share files via link or email from mobile
+- [x] Set permissions from mobile share dialog
+- [x] Open file in external apps ("Open with")
+- [x] Push notifications: comments, mentions, new shares, access requests
+- [x] Search Drive with voice input
+- [x] Biometric login
 
 ### 5.2 Mobile Editors (Android & iOS)
 - [ ] Docs app: format text, insert images, comments, suggest mode

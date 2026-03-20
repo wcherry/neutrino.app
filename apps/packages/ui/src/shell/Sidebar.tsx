@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useRef, useState } from 'react';
-import { Cloud, Upload } from 'lucide-react';
+import { Cloud, Upload, ChevronLeft, ChevronRight } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+import { useShell } from './AppShell';
 import styles from './Sidebar.module.css';
 
 export interface NavItem {
@@ -52,6 +53,7 @@ export function Sidebar({
 }: SidebarProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
+  const { sidebarCollapsed, toggleSidebarCollapsed } = useShell();
   const quotaPercent =
     quota && quota.totalBytes > 0
       ? Math.min(100, (quota.usedBytes / quota.totalBytes) * 100)
@@ -64,18 +66,31 @@ export function Sidebar({
       ? styles.warning
       : '';
 
+  const collapsed = sidebarCollapsed;
+  const sidebarClass = [styles.sidebar, collapsed ? styles.collapsed : '', className]
+    .filter(Boolean)
+    .join(' ');
+
   return (
-    <aside
-      className={[styles.sidebar, className].filter(Boolean).join(' ')}
-      aria-label="Application navigation"
-    >
-      {/* Logo */}
-      <a className={styles.logo} href={logoHref} aria-label={`${logoText} home`}>
-        <span className={styles['logo-icon']} aria-hidden="true">
-          <Cloud size={20} />
-        </span>
-        <span className={styles['logo-text']}>{logoText}</span>
-      </a>
+    <aside className={sidebarClass} aria-label="Application navigation">
+      {/* Logo row + collapse toggle */}
+      <div className={styles['logo-row']}>
+        <a className={styles.logo} href={logoHref} aria-label={`${logoText} home`} title={collapsed ? logoText : undefined}>
+          <span className={styles['logo-icon']} aria-hidden="true">
+            <Cloud size={20} />
+          </span>
+          {!collapsed && <span className={styles['logo-text']}>{logoText}</span>}
+        </a>
+        <button
+          type="button"
+          className={styles['collapse-btn']}
+          onClick={toggleSidebarCollapsed}
+          title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        >
+          {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
+        </button>
+      </div>
 
       {/* Upload */}
       {onUpload && (
@@ -92,9 +107,10 @@ export function Sidebar({
               setDragOver(false);
               if (e.dataTransfer.files.length > 0) onUpload(e.dataTransfer.files);
             }}
+            title={collapsed ? 'Upload files' : undefined}
           >
             <Upload size={16} aria-hidden="true" />
-            Upload files
+            {!collapsed && 'Upload files'}
           </button>
           <input
             ref={fileInputRef}
@@ -117,7 +133,7 @@ export function Sidebar({
       <nav className={styles.nav} aria-label="Primary navigation">
         {sections.map((section) => (
           <div key={section.id} className={styles['nav-section']}>
-            {section.label && (
+            {section.label && !collapsed && (
               <p className={styles['nav-section-label']} aria-hidden="true">
                 {section.label}
               </p>
@@ -135,12 +151,13 @@ export function Sidebar({
                     href={item.href}
                     className={classes}
                     aria-current={item.active ? 'page' : undefined}
+                    title={collapsed ? item.label : undefined}
                   >
                     <span className={styles['nav-icon']} aria-hidden="true">
                       <IconComponent size={18} strokeWidth={1.75} />
                     </span>
-                    <span className={styles['nav-label']}>{item.label}</span>
-                    {item.badge !== undefined && (
+                    {!collapsed && <span className={styles['nav-label']}>{item.label}</span>}
+                    {!collapsed && item.badge !== undefined && (
                       <span className={styles['nav-badge']} aria-label={`${item.badge} items`}>
                         {item.badge}
                       </span>
@@ -156,12 +173,13 @@ export function Sidebar({
                   className={classes}
                   onClick={item.onClick}
                   aria-current={item.active ? 'page' : undefined}
+                  title={collapsed ? item.label : undefined}
                 >
                   <span className={styles['nav-icon']} aria-hidden="true">
                     <IconComponent size={18} strokeWidth={1.75} />
                   </span>
-                  <span className={styles['nav-label']}>{item.label}</span>
-                  {item.badge !== undefined && (
+                  {!collapsed && <span className={styles['nav-label']}>{item.label}</span>}
+                  {!collapsed && item.badge !== undefined && (
                     <span className={styles['nav-badge']} aria-label={`${item.badge} items`}>
                       {item.badge}
                     </span>
@@ -174,7 +192,7 @@ export function Sidebar({
       </nav>
 
       {/* Storage quota */}
-      {quota && (
+      {quota && !collapsed && (
         <div className={styles.quota}>
           <div className={styles['quota-header']}>
             <span className={styles['quota-label']}>Storage</span>
@@ -201,6 +219,7 @@ export function Sidebar({
           </p>
         </div>
       )}
+
     </aside>
   );
 }

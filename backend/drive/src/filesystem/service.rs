@@ -2,8 +2,8 @@ use crate::{filesystem::{
     dto::{
         BulkMoveRequest, BulkResult, BulkTrashRequest, CreateFolderRequest, CreateShortcutRequest,
         FileResponse, FolderContentsOrderField, FolderContentsResponse, FolderResponse,
-        ShortcutResponse, TrashContentsResponse, TrashOrderField, UpdateFileRequest,
-        UpdateFolderRequest,
+        ShortcutResponse, StarredContentsResponse, TrashContentsResponse, TrashOrderField,
+        UpdateFileRequest, UpdateFolderRequest,
     },
     model::{NewFolderRecord, NewShortcutRecord, UpdateFolderRecord},
     repository::FilesystemRepository,
@@ -145,10 +145,16 @@ impl FilesystemService {
         }
 
         let now = Utc::now().naive_utc();
+        let starred_at = match req.is_starred {
+            Some(true) => Some(Some(now)),
+            Some(false) => Some(None),
+            None => None,
+        };
         let changeset = UpdateFolderRecord {
             name: req.name.map(|n| n.trim().to_string()),
             color: req.color,
             is_starred: req.is_starred,
+            starred_at,
             parent_id: None,
             updated_at: now,
         };
@@ -298,6 +304,37 @@ impl FilesystemService {
         })?;
 
         Ok(cursor.into_inner())
+    }
+
+    // ── Starred (Quick Access) ────────────────────────────────────────────────
+
+    pub fn list_starred(&self, user_id: &str, limit: usize) -> Result<StarredContentsResponse, ApiError> {
+        let files = self.repo.list_starred_files(user_id)?;
+        let folders = self.repo.list_starred_folders(user_id)?;
+
+        // Merge files and folders sorted by starred_at desc, then take the top `limit`.
+        // Items without starred_at (starred before this migration) sort last.
+        use std::cmp::Reverse;
+        let mut combined: Vec<(Option<chrono::NaiveDateTime>, bool, usize)> = files
+            .iter()
+            .enumerate()
+            .map(|(i, f)| (f.starred_at, false, i))
+            .chain(folders.iter().enumerate().map(|(i, f)| (f.starred_at, true, i)))
+            .collect();
+        combined.sort_by_key(|(ts, _, _)| Reverse(*ts));
+        combined.truncate(limit);
+
+        let mut out_files: Vec<FileResponse> = Vec::new();
+        let mut out_folders: Vec<FolderResponse> = Vec::new();
+        for (_, is_folder, idx) in combined {
+            if is_folder {
+                out_folders.push(FolderResponse::from(folders[idx].clone()));
+            } else {
+                out_files.push(FileResponse::from(files[idx].clone()));
+            }
+        }
+
+        Ok(StarredContentsResponse { files: out_files, folders: out_folders })
     }
 
     // ── Trash operations ──────────────────────────────────────────────────────

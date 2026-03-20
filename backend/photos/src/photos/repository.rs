@@ -134,27 +134,6 @@ impl PhotosRepository {
         self.get_photo_including_deleted(photo_id)
     }
 
-    pub fn set_thumbnail(
-        &self,
-        photo_id: &str,
-        thumbnail: String,
-        mime_type: String,
-    ) -> Result<(), ApiError> {
-        let mut conn = self.get_conn()?;
-        diesel::update(photos::table.filter(photos::id.eq(photo_id)))
-            .set((
-                photos::thumbnail.eq(Some(thumbnail)),
-                photos::thumbnail_mime_type.eq(Some(mime_type)),
-                photos::updated_at.eq(chrono::Utc::now().naive_utc()),
-            ))
-            .execute(&mut conn)
-            .map_err(|e| {
-                tracing::error!("DB set thumbnail error: {:?}", e);
-                ApiError::internal("Database error")
-            })?;
-        Ok(())
-    }
-
     pub fn set_metadata(&self, photo_id: &str, metadata: String) -> Result<(), ApiError> {
         let mut conn = self.get_conn()?;
         diesel::update(photos::table.filter(photos::id.eq(photo_id)))
@@ -168,14 +147,6 @@ impl PhotosRepository {
                 ApiError::internal("Database error")
             })?;
         Ok(())
-    }
-
-    pub fn get_thumbnail(&self, photo_id: &str) -> Result<Option<(String, String)>, ApiError> {
-        let photo = self.get_photo(photo_id)?;
-        match (photo.thumbnail, photo.thumbnail_mime_type) {
-            (Some(data), Some(mime)) => Ok(Some((data, mime))),
-            _ => Ok(None),
-        }
     }
 
     pub fn delete_expired_trash(&self, before: NaiveDateTime) -> Result<usize, ApiError> {
