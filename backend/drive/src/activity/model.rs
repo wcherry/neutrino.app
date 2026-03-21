@@ -13,6 +13,9 @@ pub struct ActivityEntry {
     pub action: String,
     pub detail_json: Option<String>,
     pub created_at: chrono::NaiveDateTime,
+    pub resource_type: String,
+    pub ip_address: Option<String>,
+    pub user_agent: Option<String>,
 }
 
 #[derive(Debug, Insertable)]
@@ -25,4 +28,7 @@ pub struct NewActivityEntry {
     pub action: String,
     pub detail_json: Option<String>,
     pub created_at: chrono::NaiveDateTime,
+    pub resource_type: String,
+    pub ip_address: Option<String>,
+    pub user_agent: Option<String>,
 }

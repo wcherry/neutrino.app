@@ -12,7 +12,9 @@ mod access_requests;
 mod activity;
 mod ai;
 mod comments;
+mod compliance;
 mod config;
+mod dlp;
 mod filesystem;
 mod irm;
 mod jobs;
@@ -21,7 +23,9 @@ mod permissions;
 mod priority;
 mod schema;
 mod search;
+mod security;
 mod common;
+mod shared_drives;
 mod sharing;
 mod storage;
 mod suggestions;
@@ -101,6 +105,26 @@ use crate::priority::{
 use crate::ai::{
     api::DriveAIApiState,
     service::DriveAIService,
+};
+use crate::shared_drives::{
+    api::SharedDrivesApiState,
+    repository::SharedDrivesRepository,
+    service::SharedDrivesService,
+};
+use crate::dlp::{
+    api::DlpApiState,
+    repository::DlpRepository,
+    service::DlpService,
+};
+use crate::compliance::{
+    api::ComplianceApiState,
+    repository::ComplianceRepository,
+    service::ComplianceService,
+};
+use crate::security::{
+    api::SecurityApiState,
+    repository::SecurityRepository,
+    service::SecurityService,
 };
 
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
@@ -348,6 +372,34 @@ async fn main() -> std::io::Result<()> {
         search_service: search_service.clone(),
     });
 
+    // Shared Drives setup
+    let shared_drives_repo = Arc::new(SharedDrivesRepository::new(pool.clone()));
+    let shared_drives_service = Arc::new(SharedDrivesService::new(shared_drives_repo));
+    let shared_drives_state = web::Data::new(SharedDrivesApiState {
+        service: shared_drives_service,
+    });
+
+    // DLP setup
+    let dlp_repo = Arc::new(DlpRepository::new(pool.clone()));
+    let dlp_service = Arc::new(DlpService::new(dlp_repo, pool.clone()));
+    let dlp_state = web::Data::new(DlpApiState {
+        service: dlp_service,
+    });
+
+    // Compliance setup
+    let compliance_repo = Arc::new(ComplianceRepository::new(pool.clone()));
+    let compliance_service = Arc::new(ComplianceService::new(compliance_repo, pool.clone()));
+    let compliance_state = web::Data::new(ComplianceApiState {
+        service: compliance_service,
+    });
+
+    // Security setup
+    let security_repo = Arc::new(SecurityRepository::new(pool.clone()));
+    let security_service = Arc::new(SecurityService::new(security_repo, pool.clone()));
+    let security_state = web::Data::new(SecurityApiState {
+        service: security_service,
+    });
+
     // Background task: reset timed-out jobs and dispatch ready jobs to workers.
     let jobs_bg = jobs_service.clone();
     tokio::spawn(async move {
@@ -401,6 +453,10 @@ async fn main() -> std::io::Result<()> {
             .app_data(search_state.clone())
             .app_data(priority_state.clone())
             .app_data(ai_state.clone())
+            .app_data(shared_drives_state.clone())
+            .app_data(dlp_state.clone())
+            .app_data(compliance_state.clone())
+            .app_data(security_state.clone())
             .wrap(Logger::default())
             .wrap(Cors::permissive())
             .service(health)
@@ -426,8 +482,15 @@ async fn main() -> std::io::Result<()> {
                     .configure(jobs::api::configure),
             )
             .service(
+                web::scope("/api/v1/drive")
+                    .configure(shared_drives::api::configure),
+            )
+            .service(
                 web::scope("/api/v1/admin")
-                    .configure(workspace::api::configure),
+                    .configure(workspace::api::configure)
+                    .configure(dlp::api::configure)
+                    .configure(compliance::api::configure)
+                    .configure(security::api::configure),
             )
             .service(
                 SwaggerUi::new("/swagger-ui/{_:.*}")

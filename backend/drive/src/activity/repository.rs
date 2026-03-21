@@ -68,4 +68,63 @@ impl ActivityRepository {
 
         Ok((items, total))
     }
+
+    pub fn list_all(
+        &self,
+        user_id_filter: Option<&str>,
+        resource_type_filter: Option<&str>,
+        action_filter: Option<&str>,
+        page: i64,
+        page_size: i64,
+    ) -> Result<(Vec<ActivityEntry>, i64), ApiError> {
+        let mut conn = self.get_conn()?;
+        let offset = (page - 1) * page_size;
+
+        // Build filtered query
+        let mut query = file_activity_log::table
+            .order(file_activity_log::created_at.desc())
+            .into_boxed();
+
+        if let Some(uid) = user_id_filter {
+            query = query.filter(file_activity_log::user_id.eq(uid.to_string()));
+        }
+        if let Some(rt) = resource_type_filter {
+            query = query.filter(file_activity_log::resource_type.eq(rt.to_string()));
+        }
+        if let Some(ac) = action_filter {
+            query = query.filter(file_activity_log::action.eq(ac.to_string()));
+        }
+
+        let items = query
+            .limit(page_size)
+            .offset(offset)
+            .select(ActivityEntry::as_select())
+            .load(&mut conn)
+            .map_err(|e| {
+                tracing::error!("DB list all activity error: {:?}", e);
+                ApiError::internal("Database error")
+            })?;
+
+        // Count with same filters
+        let mut count_query = file_activity_log::table.into_boxed();
+        if let Some(uid) = user_id_filter {
+            count_query = count_query.filter(file_activity_log::user_id.eq(uid.to_string()));
+        }
+        if let Some(rt) = resource_type_filter {
+            count_query = count_query.filter(file_activity_log::resource_type.eq(rt.to_string()));
+        }
+        if let Some(ac) = action_filter {
+            count_query = count_query.filter(file_activity_log::action.eq(ac.to_string()));
+        }
+
+        let total: i64 = count_query
+            .count()
+            .get_result(&mut conn)
+            .map_err(|e| {
+                tracing::error!("DB count all activity error: {:?}", e);
+                ApiError::internal("Database error")
+            })?;
+
+        Ok((items, total))
+    }
 }

@@ -39,6 +39,10 @@ impl ApiError {
     pub fn internal(message: impl Into<String>) -> Self {
         ApiError::new(500, "INTERNAL_ERROR", message)
     }
+
+    pub fn forbidden(message: impl Into<String>) -> Self {
+        ApiError::new(403, "FORBIDDEN", message)
+    }
 }
 
 impl fmt::Display for ApiError {

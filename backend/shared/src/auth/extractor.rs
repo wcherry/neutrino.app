@@ -10,6 +10,7 @@ pub struct AuthenticatedUser {
     pub user_id: String,
     pub email: String,
     pub token: String,
+    pub is_admin: bool,
 }
 
 impl FromRequest for AuthenticatedUser {
@@ -44,5 +45,6 @@ fn extract_user(req: &HttpRequest) -> Result<AuthenticatedUser, ApiError> {
         user_id: claims.sub,
         email: claims.email,
         token: token.to_string(),
+        is_admin: claims.is_admin,
     })
 }

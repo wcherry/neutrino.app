@@ -26,6 +26,20 @@ impl ActivityService {
         action: &str,
         detail: Option<serde_json::Value>,
     ) -> Result<(), ApiError> {
+        self.log_with_context(file_id, user_id, user_name, action, detail, None, None, None)
+    }
+
+    pub fn log_with_context(
+        &self,
+        file_id: &str,
+        user_id: &str,
+        user_name: &str,
+        action: &str,
+        detail: Option<serde_json::Value>,
+        resource_type: Option<&str>,
+        ip_address: Option<&str>,
+        user_agent: Option<&str>,
+    ) -> Result<(), ApiError> {
         let now = chrono::Local::now().naive_local();
         let detail_json = detail.map(|v| v.to_string());
 
@@ -37,6 +51,9 @@ impl ActivityService {
             action: action.to_string(),
             detail_json,
             created_at: now,
+            resource_type: resource_type.unwrap_or("file").to_string(),
+            ip_address: ip_address.map(|s| s.to_string()),
+            user_agent: user_agent.map(|s| s.to_string()),
         };
 
         self.repo.insert_entry(&entry)
@@ -59,6 +76,27 @@ impl ActivityService {
 
         let (items, total) = self.repo.list_for_file(file_id, page, page_size)?;
 
+        Ok(ActivityListResponse {
+            entries: items.into_iter().map(ActivityEntryResponse::from).collect(),
+            total,
+        })
+    }
+
+    pub fn list_all_activity(
+        &self,
+        user_id_filter: Option<&str>,
+        resource_type_filter: Option<&str>,
+        action_filter: Option<&str>,
+        page: i64,
+        page_size: i64,
+    ) -> Result<ActivityListResponse, ApiError> {
+        let (items, total) = self.repo.list_all(
+            user_id_filter,
+            resource_type_filter,
+            action_filter,
+            page,
+            page_size,
+        )?;
         Ok(ActivityListResponse {
             entries: items.into_iter().map(ActivityEntryResponse::from).collect(),
             total,

@@ -14,6 +14,8 @@ diesel::table! {
         updated_at -> Timestamp,
         // Added in migration 021
         starred_at -> Nullable<Timestamp>,
+        // Added in migration 027
+        shared_drive_id -> Nullable<Text>,
     }
 }
 
@@ -36,6 +38,8 @@ diesel::table! {
         cover_thumbnail_mime_type -> Nullable<Text>,
         // Added in migration 021
         starred_at -> Nullable<Timestamp>,
+        // Added in migration 027
+        shared_drive_id -> Nullable<Text>,
     }
 }
 
@@ -145,6 +149,10 @@ diesel::table! {
         domain_only_links -> Bool,
         created_at -> Timestamp,
         updated_at -> Timestamp,
+        // Added in migration 033
+        require_2fa -> Integer,
+        default_restrict_download_viewer -> Integer,
+        default_restrict_print_copy_viewer -> Integer,
     }
 }
 
@@ -236,6 +244,10 @@ diesel::table! {
         action -> Text,
         detail_json -> Nullable<Text>,
         created_at -> Timestamp,
+        // Added in migration 029
+        resource_type -> Text,
+        ip_address -> Nullable<Text>,
+        user_agent -> Nullable<Text>,
     }
 }
 
@@ -273,9 +285,126 @@ diesel::table! {
     }
 }
 
+// ── Phase 7 tables ────────────────────────────────────────────────────────────
+
+diesel::table! {
+    shared_drives (id) {
+        id -> Text,
+        name -> Text,
+        description -> Nullable<Text>,
+        created_by -> Text,
+        storage_used_bytes -> BigInt,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    shared_drive_members (id) {
+        id -> Text,
+        shared_drive_id -> Text,
+        user_id -> Text,
+        user_email -> Text,
+        user_name -> Text,
+        role -> Text,
+        added_by -> Text,
+        created_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    dlp_rules (id) {
+        id -> Text,
+        name -> Text,
+        description -> Nullable<Text>,
+        pattern -> Text,
+        pattern_type -> Text,
+        action -> Text,
+        severity -> Text,
+        is_active -> Integer,
+        created_by -> Text,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    dlp_violations (id) {
+        id -> Text,
+        file_id -> Text,
+        rule_id -> Text,
+        matched_at -> Timestamp,
+        notified_at -> Nullable<Timestamp>,
+        action_taken -> Nullable<Text>,
+        dismissed_at -> Nullable<Timestamp>,
+        dismissed_by -> Nullable<Text>,
+    }
+}
+
+diesel::table! {
+    legal_holds (id) {
+        id -> Text,
+        name -> Text,
+        description -> Nullable<Text>,
+        created_by -> Text,
+        custodian_ids -> Text,
+        is_active -> Integer,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    retention_policies (id) {
+        id -> Text,
+        name -> Text,
+        retain_for_days -> Integer,
+        applies_to_mime_type -> Nullable<Text>,
+        applies_to_user_id -> Nullable<Text>,
+        is_active -> Integer,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    file_legal_holds (file_id, hold_id) {
+        file_id -> Text,
+        hold_id -> Text,
+        applied_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    ransomware_events (id) {
+        id -> Text,
+        user_id -> Text,
+        triggered_at -> Timestamp,
+        event_count -> Integer,
+        status -> Text,
+        reviewed_by -> Nullable<Text>,
+        reviewed_at -> Nullable<Timestamp>,
+    }
+}
+
+diesel::table! {
+    siem_configs (id) {
+        id -> Text,
+        endpoint_url -> Text,
+        api_key -> Text,
+        format -> Text,
+        is_active -> Integer,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
 diesel::joinable!(files -> folders (folder_id));
 diesel::joinable!(shortcuts -> files (target_file_id));
 diesel::joinable!(file_versions -> files (file_id));
+diesel::joinable!(shared_drive_members -> shared_drives (shared_drive_id));
+diesel::joinable!(dlp_violations -> dlp_rules (rule_id));
+diesel::joinable!(file_legal_holds -> legal_holds (hold_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
     files,
@@ -297,4 +426,13 @@ diesel::allow_tables_to_appear_in_same_query!(
     file_access_scores,
     file_summaries,
     file_classifications,
+    shared_drives,
+    shared_drive_members,
+    dlp_rules,
+    dlp_violations,
+    legal_holds,
+    retention_policies,
+    file_legal_holds,
+    ransomware_events,
+    siem_configs,
 );

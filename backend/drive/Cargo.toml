@@ -34,3 +34,5 @@ base64 = "0.22"
 tracing = "0.1.44"
 lettre = { version = "0.11", default-features = false, features = ["smtp-transport", "tokio1-rustls-tls", "hostname", "builder"] }
 regex = "1"
+aes-gcm = "0.10"
+rand = "0.8"

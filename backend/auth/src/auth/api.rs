@@ -1,31 +1,26 @@
 use crate::auth::{
-    dto::{AuthResponse, LoginRequest, RefreshRequest, RegisterRequest, RegisterResponse, UserLookupResponse, UserProfileResponse},
+    dto::{
+        AdminUpdateUserRequest, AdminUserListResponse, AdminUserResponse, AuthResponse,
+        LoginRequest, LoginResponse, RefreshRequest, RegisterRequest, RegisterResponse,
+        SessionListResponse, TwoFactorConfirmRequest, TwoFactorDisableRequest,
+        TwoFactorEnrollResponse, TwoFactorStatusResponse, UserLookupResponse, UserProfileResponse,
+    },
     service::AuthService,
 };
 use crate::common::{ApiError, AuthenticatedUser};
-use actix_web::{get, post, web};
+use actix_web::{delete, get, patch, post, web};
 use serde::Deserialize;
 use std::sync::Arc;
 use utoipa::OpenApi;
 
 use tracing::error;
 
-
 pub struct AuthApiState {
     pub auth_service: Arc<AuthService>,
 }
 
-#[utoipa::path(
-    post,
-    path = "/api/v1/auth/register",
-    request_body = RegisterRequest,
-    responses(
-        (status = 201, description = "User registered successfully", body = RegisterResponse),
-        (status = 400, description = "Bad request"),
-        (status = 409, description = "Email already registered"),
-    ),
-    tag = "auth"
-)]
+// ── Register ──────────────────────────────────────────────────────────────────
+
 #[post("/register")]
 pub async fn register(
     state: web::Data<AuthApiState>,
@@ -34,39 +29,44 @@ pub async fn register(
     let result = state.auth_service.register(body.into_inner());
     match result {
         Ok(response) => Ok(web::Json(response)),
-        Err(e) => { error!("Error {}", e); Err(e) }
+        Err(e) => {
+            error!("Error {}", e);
+            Err(e)
+        }
     }
 }
 
-#[utoipa::path(
-    post,
-    path = "/api/v1/auth/login",
-    request_body = LoginRequest,
-    responses(
-        (status = 200, description = "Login successful", body = AuthResponse),
-        (status = 401, description = "Invalid credentials"),
-    ),
-    tag = "auth"
-)]
+// ── Login ─────────────────────────────────────────────────────────────────────
+
 #[post("/login")]
 pub async fn login(
     state: web::Data<AuthApiState>,
+    req: actix_web::HttpRequest,
     body: web::Json<LoginRequest>,
-) -> Result<web::Json<AuthResponse>, ApiError> {
-    let response = state.auth_service.login(body.into_inner())?;
+) -> Result<web::Json<LoginResponse>, ApiError> {
+    let device_name = req
+        .headers()
+        .get("X-Device-Name")
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.to_string());
+    let user_agent = req
+        .headers()
+        .get("User-Agent")
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.to_string());
+    let ip_address = req
+        .connection_info()
+        .realip_remote_addr()
+        .map(|s| s.to_string());
+
+    let response = state
+        .auth_service
+        .login(body.into_inner(), device_name, user_agent, ip_address)?;
     Ok(web::Json(response))
 }
 
-#[utoipa::path(
-    post,
-    path = "/api/v1/auth/refresh",
-    request_body = RefreshRequest,
-    responses(
-        (status = 200, description = "Token refreshed successfully", body = AuthResponse),
-        (status = 401, description = "Invalid or expired refresh token"),
-    ),
-    tag = "auth"
-)]
+// ── Refresh ───────────────────────────────────────────────────────────────────
+
 #[post("/refresh")]
 pub async fn refresh(
     state: web::Data<AuthApiState>,
@@ -76,16 +76,8 @@ pub async fn refresh(
     Ok(web::Json(response))
 }
 
-#[utoipa::path(
-    get,
-    path = "/api/v1/auth/me",
-    responses(
-        (status = 200, description = "Current user profile", body = UserProfileResponse),
-        (status = 401, description = "Not authenticated"),
-    ),
-    security(("bearer_auth" = [])),
-    tag = "auth"
-)]
+// ── Me ────────────────────────────────────────────────────────────────────────
+
 #[get("/me")]
 pub async fn me(
     state: web::Data<AuthApiState>,
@@ -95,23 +87,13 @@ pub async fn me(
     Ok(web::Json(profile))
 }
 
+// ── User Lookup ───────────────────────────────────────────────────────────────
+
 #[derive(Deserialize)]
 pub struct LookupByEmailQuery {
     pub email: String,
 }
 
-#[utoipa::path(
-    get,
-    path = "/api/v1/auth/users/lookup",
-    params(("email" = String, Query, description = "Email address to look up")),
-    responses(
-        (status = 200, description = "User found", body = UserLookupResponse),
-        (status = 404, description = "User not found"),
-        (status = 401, description = "Not authenticated"),
-    ),
-    security(("bearer_auth" = [])),
-    tag = "auth"
-)]
 #[get("/users/lookup")]
 pub async fn lookup_user_by_email(
     state: web::Data<AuthApiState>,
@@ -124,18 +106,6 @@ pub async fn lookup_user_by_email(
     }
 }
 
-#[utoipa::path(
-    get,
-    path = "/api/v1/auth/users/{user_id}",
-    params(("user_id" = String, Path, description = "User ID")),
-    responses(
-        (status = 200, description = "User found", body = UserLookupResponse),
-        (status = 404, description = "User not found"),
-        (status = 401, description = "Not authenticated"),
-    ),
-    security(("bearer_auth" = [])),
-    tag = "auth"
-)]
 #[get("/users/{user_id}")]
 pub async fn get_user_by_id(
     state: web::Data<AuthApiState>,
@@ -149,6 +119,154 @@ pub async fn get_user_by_id(
     }
 }
 
+// ── 2FA ───────────────────────────────────────────────────────────────────────
+
+#[get("/2fa/status")]
+pub async fn two_factor_status(
+    state: web::Data<AuthApiState>,
+    user: AuthenticatedUser,
+) -> Result<web::Json<TwoFactorStatusResponse>, ApiError> {
+    let status = state.auth_service.get_two_factor_status(&user.user_id)?;
+    Ok(web::Json(status))
+}
+
+#[post("/2fa/enroll")]
+pub async fn two_factor_enroll(
+    state: web::Data<AuthApiState>,
+    user: AuthenticatedUser,
+) -> Result<web::Json<TwoFactorEnrollResponse>, ApiError> {
+    let result = state
+        .auth_service
+        .enroll_two_factor(&user.user_id, &user.email)?;
+    Ok(web::Json(result))
+}
+
+#[post("/2fa/confirm")]
+pub async fn two_factor_confirm(
+    state: web::Data<AuthApiState>,
+    user: AuthenticatedUser,
+    body: web::Json<TwoFactorConfirmRequest>,
+) -> Result<web::Json<TwoFactorStatusResponse>, ApiError> {
+    state
+        .auth_service
+        .confirm_two_factor(&user.user_id, &body.code)?;
+    Ok(web::Json(TwoFactorStatusResponse { enabled: true }))
+}
+
+#[post("/2fa/disable")]
+pub async fn two_factor_disable(
+    state: web::Data<AuthApiState>,
+    user: AuthenticatedUser,
+    body: web::Json<TwoFactorDisableRequest>,
+) -> Result<web::Json<TwoFactorStatusResponse>, ApiError> {
+    state
+        .auth_service
+        .disable_two_factor(&user.user_id, body.into_inner())?;
+    Ok(web::Json(TwoFactorStatusResponse { enabled: false }))
+}
+
+// ── Sessions ──────────────────────────────────────────────────────────────────
+
+#[get("/sessions")]
+pub async fn list_sessions(
+    state: web::Data<AuthApiState>,
+    user: AuthenticatedUser,
+) -> Result<web::Json<SessionListResponse>, ApiError> {
+    let result = state.auth_service.list_sessions(&user.user_id)?;
+    Ok(web::Json(result))
+}
+
+#[delete("/sessions/{session_id}")]
+pub async fn revoke_session(
+    state: web::Data<AuthApiState>,
+    user: AuthenticatedUser,
+    path: web::Path<String>,
+) -> Result<actix_web::HttpResponse, ApiError> {
+    let session_id = path.into_inner();
+    state.auth_service.revoke_session(&user.user_id, &session_id)?;
+    Ok(actix_web::HttpResponse::NoContent().finish())
+}
+
+#[delete("/sessions")]
+pub async fn revoke_all_sessions(
+    state: web::Data<AuthApiState>,
+    user: AuthenticatedUser,
+) -> Result<actix_web::HttpResponse, ApiError> {
+    state.auth_service.revoke_all_sessions(&user.user_id)?;
+    Ok(actix_web::HttpResponse::NoContent().finish())
+}
+
+// ── Admin ─────────────────────────────────────────────────────────────────────
+
+fn require_admin(user: &AuthenticatedUser) -> Result<(), ApiError> {
+    if !user.is_admin {
+        Err(ApiError::forbidden("Admin access required"))
+    } else {
+        Ok(())
+    }
+}
+
+#[derive(Deserialize)]
+pub struct AdminListQuery {
+    pub page: Option<i64>,
+    pub page_size: Option<i64>,
+}
+
+#[get("/admin/users")]
+pub async fn admin_list_users(
+    state: web::Data<AuthApiState>,
+    user: AuthenticatedUser,
+    query: web::Query<AdminListQuery>,
+) -> Result<web::Json<AdminUserListResponse>, ApiError> {
+    require_admin(&user)?;
+    let result = state.auth_service.admin_list_users(
+        query.page.unwrap_or(1),
+        query.page_size.unwrap_or(20),
+    )?;
+    Ok(web::Json(result))
+}
+
+#[get("/admin/users/{user_id}")]
+pub async fn admin_get_user(
+    state: web::Data<AuthApiState>,
+    user: AuthenticatedUser,
+    path: web::Path<String>,
+) -> Result<web::Json<AdminUserResponse>, ApiError> {
+    require_admin(&user)?;
+    let target_id = path.into_inner();
+    let result = state.auth_service.admin_get_user(&target_id)?;
+    Ok(web::Json(result))
+}
+
+#[patch("/admin/users/{user_id}")]
+pub async fn admin_update_user(
+    state: web::Data<AuthApiState>,
+    user: AuthenticatedUser,
+    path: web::Path<String>,
+    body: web::Json<AdminUpdateUserRequest>,
+) -> Result<web::Json<AdminUserResponse>, ApiError> {
+    require_admin(&user)?;
+    let target_id = path.into_inner();
+    let result = state
+        .auth_service
+        .admin_update_user(&target_id, body.into_inner())?;
+    Ok(web::Json(result))
+}
+
+#[delete("/admin/users/{user_id}")]
+pub async fn admin_delete_user(
+    state: web::Data<AuthApiState>,
+    user: AuthenticatedUser,
+    path: web::Path<String>,
+) -> Result<actix_web::HttpResponse, ApiError> {
+    require_admin(&user)?;
+    let target_id = path.into_inner();
+    state.auth_service.admin_delete_user(&target_id)?;
+    Ok(actix_web::HttpResponse::NoContent().finish())
+}
+
+// ── Route Configuration ───────────────────────────────────────────────────────
+
 pub fn configure(conf: &mut web::ServiceConfig) {
     conf.service(
         web::scope("/auth")
@@ -157,14 +275,28 @@ pub fn configure(conf: &mut web::ServiceConfig) {
             .service(refresh)
             .service(me)
             .service(lookup_user_by_email)
-            .service(get_user_by_id),
+            .service(get_user_by_id)
+            .service(two_factor_status)
+            .service(two_factor_enroll)
+            .service(two_factor_confirm)
+            .service(two_factor_disable)
+            .service(list_sessions)
+            .service(revoke_session)
+            .service(revoke_all_sessions),
+    )
+    .service(
+        web::scope("/admin")
+            .service(admin_list_users)
+            .service(admin_get_user)
+            .service(admin_update_user)
+            .service(admin_delete_user),
     );
 }
 
 #[derive(OpenApi)]
 #[openapi(
-    paths(register, login, refresh, me, lookup_user_by_email, get_user_by_id),
-    components(schemas(RegisterRequest, LoginRequest, RefreshRequest, AuthResponse, RegisterResponse, UserProfileResponse, UserLookupResponse)),
+    paths(),
+    components(schemas(RegisterRequest, LoginRequest, RefreshRequest, AuthResponse, LoginResponse, RegisterResponse, UserProfileResponse, UserLookupResponse)),
     tags((name = "auth", description = "Authentication endpoints"))
 )]
 pub struct AuthApiDoc;

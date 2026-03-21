@@ -20,6 +20,7 @@ pub struct FileRecord {
     pub cover_thumbnail: Option<String>,
     pub cover_thumbnail_mime_type: Option<String>,
     pub starred_at: Option<NaiveDateTime>,
+    pub shared_drive_id: Option<String>,
 }
 
 #[derive(Debug, Insertable)]

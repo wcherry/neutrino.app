@@ -12,6 +12,8 @@ pub struct Claims {
     pub email: String,
     pub exp: i64,
     pub iat: i64,
+    #[serde(default)]
+    pub is_admin: bool,
 }
 
 pub struct TokenService {
@@ -38,6 +40,10 @@ impl TokenService {
     }
 
     pub fn generate_access_token(&self, user_id: &str, email: &str) -> Result<String, ApiError> {
+        self.generate_access_token_with_admin(user_id, email, false)
+    }
+
+    pub fn generate_access_token_with_admin(&self, user_id: &str, email: &str, is_admin: bool) -> Result<String, ApiError> {
         let now = Utc::now();
         let expiry = now + Duration::seconds(self.access_expiry_secs as i64);
 
@@ -46,6 +52,7 @@ impl TokenService {
             email: email.to_string(),
             exp: expiry.timestamp(),
             iat: now.timestamp(),
+            is_admin,
         };
 
         encode(

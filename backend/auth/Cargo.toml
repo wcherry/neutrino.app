@@ -24,3 +24,6 @@ thiserror = "1"
 libsqlite3-sys = { version = "0.27", features = ["bundled"] }
 hex = "0.4"
 tracing = "0.1.44"
+totp-rs = { version = "5", features = ["gen_secret", "otpauth"] }
+base32 = "0.4"
+rand = "0.8"
