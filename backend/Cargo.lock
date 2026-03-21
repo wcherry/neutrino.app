@@ -2983,6 +2983,7 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
+ "sha2",
  "shared",
  "thiserror 1.0.69",
  "tokio",

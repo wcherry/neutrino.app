@@ -1,5 +1,8 @@
 use crate::photos::{
-    dto::{ListPhotosResponse, PhotoResponse, RegisterPhotoRequest, UpdatePhotoRequest},
+    dto::{
+        ListPhotosResponse, PhotoEditParams, PhotoResponse, RegisterPhotoRequest,
+        SetupLockedFolderRequest, ShareSettingsRequest, UnlockFolderRequest, UpdatePhotoRequest,
+    },
     service::PhotosService,
 };
 use actix_web::{delete, get, patch, post, put, web, HttpResponse};
@@ -255,16 +258,184 @@ pub async fn put_metadata(
     Ok(HttpResponse::NoContent().finish())
 }
 
+// ---- 6.7.1 Photo Map ----
+
+#[get("/photos/map")]
+pub async fn get_photo_map(
+    state: web::Data<PhotosApiState>,
+    user: AuthenticatedUser,
+    query: web::Query<std::collections::HashMap<String, String>>,
+) -> Result<HttpResponse, ApiError> {
+    let bbox = query.get("bbox").map(|s| s.as_str());
+    let limit: i64 = query
+        .get("limit")
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(500);
+    let result = state.photos_service.get_photo_map(&user, bbox, limit)?;
+    Ok(HttpResponse::Ok().json(result))
+}
+
+// ---- 6.7.2 Photo Edits ----
+
+#[put("/photos/{id}/edits")]
+pub async fn put_photo_edits(
+    state: web::Data<PhotosApiState>,
+    user: AuthenticatedUser,
+    path: web::Path<String>,
+    body: web::Json<PhotoEditParams>,
+) -> Result<HttpResponse, ApiError> {
+    let photo_id = path.into_inner();
+    let result = state
+        .photos_service
+        .save_photo_edits(&user, &photo_id, body.into_inner())?;
+    Ok(HttpResponse::Ok().json(result))
+}
+
+#[get("/photos/{id}/edits")]
+pub async fn get_photo_edits(
+    state: web::Data<PhotosApiState>,
+    user: AuthenticatedUser,
+    path: web::Path<String>,
+) -> Result<HttpResponse, ApiError> {
+    let photo_id = path.into_inner();
+    match state.photos_service.get_photo_edits(&user, &photo_id)? {
+        Some(edits) => Ok(HttpResponse::Ok().json(edits)),
+        None => Err(ApiError::not_found("No edits found for this photo")),
+    }
+}
+
+#[delete("/photos/{id}/edits")]
+pub async fn delete_photo_edits(
+    state: web::Data<PhotosApiState>,
+    user: AuthenticatedUser,
+    path: web::Path<String>,
+) -> Result<HttpResponse, ApiError> {
+    let photo_id = path.into_inner();
+    state.photos_service.delete_photo_edits(&user, &photo_id)?;
+    Ok(HttpResponse::NoContent().finish())
+}
+
+// ---- 6.7.3 Memories ----
+
+#[get("/photos/memories")]
+pub async fn get_memories(
+    state: web::Data<PhotosApiState>,
+    user: AuthenticatedUser,
+) -> Result<HttpResponse, ApiError> {
+    let result = state.photos_service.get_memories(&user)?;
+    Ok(HttpResponse::Ok().json(result))
+}
+
+#[get("/photos/year-in-review")]
+pub async fn get_year_in_review(
+    state: web::Data<PhotosApiState>,
+    user: AuthenticatedUser,
+    query: web::Query<std::collections::HashMap<String, String>>,
+) -> Result<HttpResponse, ApiError> {
+    let year: Option<i32> = query.get("year").and_then(|v| v.parse().ok());
+    let result = state.photos_service.get_year_in_review(&user, year)?;
+    Ok(HttpResponse::Ok().json(result))
+}
+
+// ---- 6.7.4 Locked Folder ----
+
+#[post("/photos/locked-folder/setup")]
+pub async fn setup_locked_folder(
+    state: web::Data<PhotosApiState>,
+    user: AuthenticatedUser,
+    body: web::Json<SetupLockedFolderRequest>,
+) -> Result<HttpResponse, ApiError> {
+    state
+        .photos_service
+        .setup_locked_folder(&user, &body.pin)?;
+    Ok(HttpResponse::NoContent().finish())
+}
+
+#[post("/photos/locked-folder/unlock")]
+pub async fn unlock_locked_folder(
+    state: web::Data<PhotosApiState>,
+    user: AuthenticatedUser,
+    body: web::Json<UnlockFolderRequest>,
+) -> Result<HttpResponse, ApiError> {
+    let result = state
+        .photos_service
+        .unlock_locked_folder(&user, &body.pin)?;
+    Ok(HttpResponse::Ok().json(result))
+}
+
+#[put("/photos/{id}/lock")]
+pub async fn lock_photo_endpoint(
+    state: web::Data<PhotosApiState>,
+    user: AuthenticatedUser,
+    path: web::Path<String>,
+) -> Result<HttpResponse, ApiError> {
+    let photo_id = path.into_inner();
+    state.photos_service.lock_photo(&user, &photo_id, true)?;
+    Ok(HttpResponse::NoContent().finish())
+}
+
+#[put("/photos/{id}/unlock-photo")]
+pub async fn unlock_photo_endpoint(
+    state: web::Data<PhotosApiState>,
+    user: AuthenticatedUser,
+    path: web::Path<String>,
+) -> Result<HttpResponse, ApiError> {
+    let photo_id = path.into_inner();
+    state.photos_service.lock_photo(&user, &photo_id, false)?;
+    Ok(HttpResponse::NoContent().finish())
+}
+
+// ---- 6.7.5 Location Privacy ----
+
+#[put("/photos/{id}/share-settings")]
+pub async fn update_share_settings(
+    state: web::Data<PhotosApiState>,
+    user: AuthenticatedUser,
+    path: web::Path<String>,
+    body: web::Json<ShareSettingsRequest>,
+) -> Result<HttpResponse, ApiError> {
+    let photo_id = path.into_inner();
+    state
+        .photos_service
+        .update_share_settings(&user, &photo_id, body.into_inner())?;
+    Ok(HttpResponse::NoContent().finish())
+}
+
+// ---- 6.7.6 Free Up Space ----
+
+#[get("/photos/backed-up")]
+pub async fn get_backed_up_photos(
+    state: web::Data<PhotosApiState>,
+    user: AuthenticatedUser,
+) -> Result<HttpResponse, ApiError> {
+    let result = state.photos_service.get_backed_up_photos(&user).await?;
+    Ok(HttpResponse::Ok().json(result))
+}
+
 pub fn configure_photos(cfg: &mut web::ServiceConfig) {
     cfg.service(list_trash)
         .service(empty_trash)
+        .service(get_photo_map)
+        .service(get_memories)
+        .service(get_year_in_review)
+        .service(get_backed_up_photos)
+        .service(setup_locked_folder)
+        .service(unlock_locked_folder)
         .service(list_photos)
         .service(register_photo)
         .service(get_photo)
         .service(update_photo)
         .service(trash_photo)
         .service(restore_photo)
-        .service(put_metadata);
+        .service(put_thumbnail)
+        .service(get_thumbnail)
+        .service(put_metadata)
+        .service(put_photo_edits)
+        .service(get_photo_edits)
+        .service(delete_photo_edits)
+        .service(lock_photo_endpoint)
+        .service(unlock_photo_endpoint)
+        .service(update_share_settings);
 }
 
 #[derive(OpenApi)]

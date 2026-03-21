@@ -26,6 +26,7 @@ import {
   type AlbumResponse,
   type PersonResponse,
   type FileItem,
+  type MemoryYear,
 } from '@/lib/api';
 import { PhotoInfoPanel } from './PhotoInfoPanel';
 import { PersonPhotosPanel } from './PersonPhotosPanel';
@@ -33,7 +34,7 @@ import { SuggestionsPanel, SuggestionsBadge } from './SuggestionsPanel';
 import { PreviewModal } from '../drive/PreviewModal';
 import styles from './page.module.css';
 
-type FilterTab = 'all' | 'favorites' | 'archive' | 'albums' | 'people';
+type FilterTab = 'all' | 'favorites' | 'archive' | 'albums' | 'people' | 'memories';
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, {
@@ -260,6 +261,12 @@ export default function PhotosPage() {
     queryFn: () => personsApi.listPersons(),
   });
 
+  const memoriesQuery = useQuery({
+    queryKey: ['memories'],
+    queryFn: () => photosApi.getMemories(),
+    enabled: activeTab === 'memories',
+  });
+
   // Close dropdown when clicking outside.
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -329,9 +336,11 @@ export default function PhotosPage() {
   const photos = photosQuery.data?.photos ?? [];
   const albums = albumsQuery.data?.albums ?? [];
   const persons = personsQuery.data?.persons ?? [];
+  const memories = memoriesQuery.data?.memories ?? [];
   const isLoading =
     (activeTab === 'people' ? personsQuery.isLoading : false) ||
     (activeTab === 'albums' ? albumsQuery.isLoading : false) ||
+    (activeTab === 'memories' ? memoriesQuery.isLoading : false) ||
     (['all', 'favorites', 'archive'].includes(activeTab) ? photosQuery.isLoading : false);
 
   const activeFilterPersonIds = [...includePersonIds, ...excludePersonIds];
@@ -393,7 +402,7 @@ export default function PhotosPage() {
       )}
 
       <div className={styles.filterTabs}>
-        {(['all', 'favorites', 'archive', 'albums', 'people'] as FilterTab[]).map((tab) => (
+        {(['all', 'favorites', 'archive', 'albums', 'people', 'memories'] as FilterTab[]).map((tab) => (
           <button
             key={tab}
             className={`${styles.filterTab} ${activeTab === tab ? styles.filterTabActive : ''}`}
@@ -411,6 +420,7 @@ export default function PhotosPage() {
             {tab === 'archive' && 'Archive'}
             {tab === 'albums' && 'Albums'}
             {tab === 'people' && 'People'}
+            {tab === 'memories' && 'Memories'}
           </button>
         ))}
       </div>
@@ -537,6 +547,31 @@ export default function PhotosPage() {
       {isLoading ? (
         <div style={{ display: 'flex', justifyContent: 'center', padding: 'var(--space-16)' }}>
           <Spinner size="lg" />
+        </div>
+      ) : activeTab === 'memories' ? (
+        <div className={styles.memoriesSection}>
+          {memories.length === 0 ? (
+            <div className={styles.emptyState}>
+              <Sparkles size={48} className={styles.emptyIcon} />
+              <p>No memories yet. Photos with dates from past years will appear here.</p>
+            </div>
+          ) : (
+            memories.map((memory: MemoryYear) => (
+              <div key={memory.year} className={styles.memoriesYear}>
+                <p className={styles.memoriesYearTitle}>{memory.year}</p>
+                <div className={styles.memoriesPhotoRow}>
+                  {memory.photos.map((p) => {
+                    const thumbSrc = `/api/v1/photos/${p.id}/thumbnail`;
+                    return (
+                      <div key={p.id} className={styles.memoriesThumb}>
+                        <img src={thumbSrc} alt="" loading="lazy" />
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))
+          )}
         </div>
       ) : activeTab === 'people' ? (
         <div className={styles.peopleSection}>

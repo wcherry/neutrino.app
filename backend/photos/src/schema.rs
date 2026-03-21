@@ -10,6 +10,28 @@ diesel::table! {
         metadata -> Nullable<Text>,
         created_at -> Timestamp,
         updated_at -> Timestamp,
+        is_locked -> Integer,
+        strip_gps -> Integer,
+    }
+}
+
+diesel::table! {
+    photo_edits (photo_id) {
+        photo_id -> Text,
+        edits_json -> Text,
+        preview_storage_path -> Nullable<Text>,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    locked_folder_settings (user_id) {
+        user_id -> Text,
+        is_enabled -> Integer,
+        pin_hash -> Nullable<Text>,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
     }
 }
 

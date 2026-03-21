@@ -27,3 +27,4 @@ reqwest = { version = "0.12", features = ["json", "multipart"] }
 tracing = "0.1.44"
 futures-util = "0.3"
 base64 = "0.22"
+sha2 = "0.10"

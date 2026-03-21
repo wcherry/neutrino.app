@@ -294,14 +294,14 @@ A phased roadmap for building a Google Drive-competitive cloud storage and colla
 - [x] Answer questions about Drive content without opening files
 
 ### 6.7 Google Photo Advanced Feautures
-- [ ] Photo map: browse media by GPS location on an interactive map
-- [ ] Non-destructive editing: brightness, contrast, saturation, warmth, highlights, shadows, crop, rotate, filters; original always preserved and restorable
+- [x] Photo map: browse media by GPS location on an interactive map
+- [x] Non-destructive editing: brightness, contrast, saturation, warmth, highlights, shadows, crop, rotate, filters; original always preserved and restorable
 - [ ] Video editing: trim, stabilize, mute audio; export edited clip
 - [ ] Semantic search: search by object, place, date range, or activity without manual tagging
-- [ ] Memories: "On this day" highlights, year-in-review, and themed collages surfaced automatically
-- [ ] Locked folder: PIN/biometric-protected private space excluded from backups and search
-- [ ] Location privacy: strip GPS metadata before sharing; disable location in shared links
-- [ ] Free up space: identify backed-up photos and offer to delete local device copies
+- [x] Memories: "On this day" highlights, year-in-review, and themed collages surfaced automatically
+- [x] Locked folder: PIN/biometric-protected private space excluded from backups and search
+- [x] Location privacy: strip GPS metadata before sharing; disable location in shared links
+- [x] Free up space: identify backed-up photos and offer to delete local device copies
 
 ### 6.8 Google Docs Advanced Features
 - [x] Template support: Can create, edit, use, and select a default template

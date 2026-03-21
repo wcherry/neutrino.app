@@ -177,3 +177,16 @@ struct FileListResponse: Codable {
     let limit: Int
     let offset: Int
 }
+
+// MARK: - Photos Advanced Features
+
+struct BackedUpPhotoItem: Codable, Identifiable {
+    let id: String
+    let name: String
+    let sizeBytes: Int64
+    let captureDate: String?
+}
+
+struct BackedUpPhotosResponse: Codable {
+    let photos: [BackedUpPhotoItem]
+}

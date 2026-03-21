@@ -409,6 +409,14 @@ final class DriveService: ObservableObject {
         components?.queryItems = [URLQueryItem(name: "token", value: token)]
         return components?.url
     }
+
+    // MARK: - Photos Advanced Features
+
+    /// Returns photos that have been backed up (processed by the worker).
+    /// Used by the "Free Up Space" feature to know which photos are safe to delete locally.
+    func getBackedUpPhotos() async throws -> BackedUpPhotosResponse {
+        try await api.request("/api/v1/photos/backed-up")
+    }
 }
 
 private struct RemoteFileFreshness {

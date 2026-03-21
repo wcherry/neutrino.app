@@ -1500,6 +1500,82 @@ export interface PersonRelationshipsResponse {
   relationships: PersonRelationship[];
 }
 
+// ---- Photos Advanced Features types ----
+
+export interface MapPhotoItem {
+  id: string;
+  thumbnailUrl: string;
+  latitude: number;
+  longitude: number;
+  captureDate: string | null;
+}
+
+export interface PhotoMapResponse {
+  items: MapPhotoItem[];
+}
+
+export interface CropParams {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface PhotoEditParams {
+  brightness?: number;
+  contrast?: number;
+  saturation?: number;
+  warmth?: number;
+  highlights?: number;
+  shadows?: number;
+  crop?: CropParams;
+  rotate?: number;
+  filter?: string;
+}
+
+export interface PhotoEditResponse {
+  photoId: string;
+  edits: PhotoEditParams;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MemoryPhotoItem {
+  id: string;
+  thumbnailUrl: string;
+  captureDate: string | null;
+}
+
+export interface MemoryYear {
+  year: number;
+  photos: MemoryPhotoItem[];
+}
+
+export interface MemoriesResponse {
+  memories: MemoryYear[];
+}
+
+export interface YearInReviewResponse {
+  year: number;
+  photos: MemoryPhotoItem[];
+}
+
+export interface UnlockTokenResponse {
+  unlockToken: string;
+  expiresAt: string;
+}
+
+export interface BackedUpPhotoItem {
+  id: string;
+  name: string;
+  sizeBytes: number;
+  captureDate: string | null;
+}
+
+export interface BackedUpPhotosResponse {
+  photos: BackedUpPhotoItem[];
+}
+
 export const photosApi = {
   async listPhotos(opts?: {
     archivedOnly?: boolean;
@@ -1565,6 +1641,79 @@ export const photosApi = {
       method: 'POST',
       body: JSON.stringify({ fileId: fileItem.id } satisfies RegisterPhotoRequest),
     });
+  },
+
+  // ---- 6.7.1 Photo Map ----
+  async getMap(bbox?: string): Promise<PhotoMapResponse> {
+    const qs = buildQuery({ bbox, limit: 500 });
+    return request<PhotoMapResponse>(`/api/v1/photos/map${qs}`);
+  },
+
+  // ---- 6.7.2 Photo Edits ----
+  async getEdits(photoId: string): Promise<PhotoEditResponse | null> {
+    try {
+      return await request<PhotoEditResponse>(`/api/v1/photos/${photoId}/edits`);
+    } catch (e) {
+      if (e instanceof ApiClientError && e.statusCode === 404) return null;
+      throw e;
+    }
+  },
+
+  async saveEdits(photoId: string, params: PhotoEditParams): Promise<PhotoEditResponse> {
+    return request<PhotoEditResponse>(`/api/v1/photos/${photoId}/edits`, {
+      method: 'PUT',
+      body: JSON.stringify(params),
+    });
+  },
+
+  async deleteEdits(photoId: string): Promise<void> {
+    return request<void>(`/api/v1/photos/${photoId}/edits`, { method: 'DELETE' });
+  },
+
+  // ---- 6.7.3 Memories ----
+  async getMemories(): Promise<MemoriesResponse> {
+    return request<MemoriesResponse>('/api/v1/photos/memories');
+  },
+
+  async getYearInReview(year?: number): Promise<YearInReviewResponse> {
+    const qs = buildQuery({ year });
+    return request<YearInReviewResponse>(`/api/v1/photos/year-in-review${qs}`);
+  },
+
+  // ---- 6.7.4 Locked Folder ----
+  async setupLockedFolder(pin: string): Promise<void> {
+    return request<void>('/api/v1/photos/locked-folder/setup', {
+      method: 'POST',
+      body: JSON.stringify({ pin }),
+    });
+  },
+
+  async unlockFolder(pin: string): Promise<UnlockTokenResponse> {
+    return request<UnlockTokenResponse>('/api/v1/photos/locked-folder/unlock', {
+      method: 'POST',
+      body: JSON.stringify({ pin }),
+    });
+  },
+
+  async lockPhoto(photoId: string): Promise<void> {
+    return request<void>(`/api/v1/photos/${photoId}/lock`, { method: 'PUT' });
+  },
+
+  async unlockPhoto(photoId: string): Promise<void> {
+    return request<void>(`/api/v1/photos/${photoId}/unlock-photo`, { method: 'PUT' });
+  },
+
+  // ---- 6.7.5 Location Privacy ----
+  async updateShareSettings(photoId: string, stripGps: boolean): Promise<void> {
+    return request<void>(`/api/v1/photos/${photoId}/share-settings`, {
+      method: 'PUT',
+      body: JSON.stringify({ stripGps }),
+    });
+  },
+
+  // ---- 6.7.6 Free Up Space ----
+  async getBackedUp(): Promise<BackedUpPhotosResponse> {
+    return request<BackedUpPhotosResponse>('/api/v1/photos/backed-up');
   },
 };
 
