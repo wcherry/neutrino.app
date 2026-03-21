@@ -423,7 +423,7 @@ export default function DrivePage() {
                 const items = [...starredFiles, ...starredFolders];
                 if (items.length === 0) {
                   return (
-                    <Text size="sm" color="muted" style={{ gridColumn: '1 / -1', padding: '8px 0' }}>
+                    <Text size="sm" color="muted">
                       Star files and folders to see them here.
                     </Text>
                   );

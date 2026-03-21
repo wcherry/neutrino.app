@@ -34,3 +34,5 @@ data/
 logs/
 
 *.onnx
+
+./secrets

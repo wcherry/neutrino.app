@@ -9,6 +9,7 @@ mod drive_client;
 mod face_cluster;
 mod face_detect;
 mod face_recognize;
+mod index_content;
 mod metadata;
 mod thumbnail;
 
@@ -144,6 +145,27 @@ async fn process_job(state: &WorkerState, job: JobResponse) {
             )
             .await
         }
+        "index_content" => {
+            #[derive(serde::Deserialize)]
+            #[serde(rename_all = "camelCase")]
+            struct IndexContentPayload {
+                file_id: String,
+                user_id: String,
+            }
+            match serde_json::from_value::<IndexContentPayload>(job.payload.clone()) {
+                Err(e) => Err(format!("Invalid index_content payload: {}", e)),
+                Ok(payload) => {
+                    index_content::process_index_content(
+                        &state.http,
+                        state.drive.drive_base_url(),
+                        &payload.file_id,
+                        &payload.user_id,
+                        state.drive.worker_secret(),
+                    )
+                    .await
+                }
+            }
+        }
         other => Err(format!("Unknown job type: {}", other)),
     };
 
@@ -200,7 +222,7 @@ async fn process_thumbnail(state: &WorkerState, job: &JobResponse) -> Result<(),
     // Upload thumbnail to the drive service (stored as cover_thumbnail on the file).
     let thumb_url = format!(
         "{}/api/v1/jobs/files/{}/thumbnail",
-        state.drive.base_url(), payload.file_id
+        state.drive.drive_base_url(), payload.file_id
     );
     let resp = state
         .http

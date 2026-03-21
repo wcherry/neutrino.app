@@ -10,6 +10,7 @@ use utoipa_swagger_ui::{SwaggerUi, Config as SwaggerConfig};
 use actix_cors::Cors;
 mod access_requests;
 mod activity;
+mod ai;
 mod comments;
 mod config;
 mod filesystem;
@@ -17,7 +18,9 @@ mod irm;
 mod jobs;
 mod notifications;
 mod permissions;
+mod priority;
 mod schema;
+mod search;
 mod common;
 mod sharing;
 mod storage;
@@ -86,6 +89,18 @@ use crate::suggestions::{
     api::SuggestionsApiState,
     repository::SuggestionsRepository,
     service::SuggestionsService,
+};
+use crate::search::{
+    api::SearchApiState,
+    service::SearchService,
+};
+use crate::priority::{
+    api::PriorityApiState,
+    service::PriorityService,
+};
+use crate::ai::{
+    api::DriveAIApiState,
+    service::DriveAIService,
 };
 
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
@@ -199,16 +214,17 @@ async fn main() -> std::io::Result<()> {
         irm_service: irm_service.clone(),
     });
 
+    // Jobs setup (must come before storage_state so we can pass it there)
+    let jobs_repo = Arc::new(JobsRepository::new(pool.clone()));
+    let jobs_service = Arc::new(JobsService::new(jobs_repo, config.storage_path.clone(), config.jobs_per_worker));
+    let worker_secret_data = web::Data::new(WorkerSecretData(config.worker_secret.clone()));
+
     let storage_repo = Arc::new(StorageRepository::new(pool.clone()));
     let storage_service = Arc::new(StorageService::new(
         storage_repo,
         file_store.clone(),
         permissions_service.clone(),
     ));
-
-    // Jobs setup — created here so StorageApiState can enqueue thumbnail jobs on upload.
-    let jobs_repo = Arc::new(JobsRepository::new(pool.clone()));
-    let jobs_service = Arc::new(JobsService::new(jobs_repo, config.storage_path.clone(), config.jobs_per_worker));
 
     let storage_state = web::Data::new(StorageApiState {
         storage_service: storage_service.clone(),
@@ -313,7 +329,24 @@ async fn main() -> std::io::Result<()> {
         jobs_service: jobs_service.clone(),
         storage_service: storage_service.clone(),
     });
-    let worker_secret_data = web::Data::new(WorkerSecretData(config.worker_secret.clone()));
+    // Search setup
+    let search_service = Arc::new(SearchService::new(pool.clone()));
+    let search_state = web::Data::new(SearchApiState {
+        search_service: search_service.clone(),
+    });
+
+    // Priority setup
+    let priority_service = Arc::new(PriorityService::new(pool.clone()));
+    let priority_state = web::Data::new(PriorityApiState {
+        priority_service: priority_service.clone(),
+    });
+
+    // AI setup
+    let ai_service = Arc::new(DriveAIService::new(pool.clone()));
+    let ai_state = web::Data::new(DriveAIApiState {
+        ai_service: ai_service.clone(),
+        search_service: search_service.clone(),
+    });
 
     // Background task: reset timed-out jobs and dispatch ready jobs to workers.
     let jobs_bg = jobs_service.clone();
@@ -365,6 +398,9 @@ async fn main() -> std::io::Result<()> {
             .app_data(activity_state.clone())
             .app_data(comments_state.clone())
             .app_data(suggestions_state.clone())
+            .app_data(search_state.clone())
+            .app_data(priority_state.clone())
+            .app_data(ai_state.clone())
             .wrap(Logger::default())
             .wrap(Cors::permissive())
             .service(health)
@@ -379,7 +415,10 @@ async fn main() -> std::io::Result<()> {
                     .configure(comments::api::configure)
                     .configure(suggestions::api::configure)
                     .configure(activity::api::configure)
-                    .configure(notifications::api::configure),
+                    .configure(notifications::api::configure)
+                    .configure(search::api::configure)
+                    .configure(priority::api::configure)
+                    .configure(ai::api::configure),
             )
             .service(
                 web::scope("/api/v1")

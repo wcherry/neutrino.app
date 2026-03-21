@@ -254,18 +254,18 @@ A phased roadmap for building a Google Drive-competitive cloud storage and colla
 **Goal:** Users can find files instantly and get intelligent assistance inside their documents and Drive. Adds advanced features to apps.
 
 ### 6.1 Search Infrastructure
-- [ ] Full-text indexing: index content of Docs, Sheets, Slides
+- [x] Full-text indexing: index content of Docs, Sheets, Slides
 - [ ] OCR indexing: extract and index text from images and PDF files
-- [ ] Search by file name, content, file type, owner, date range, location, shared status
+- [x] Search by file name, content, file type, owner, date range, location, shared status
 - [ ] Natural language query support (e.g. "budget spreadsheet from last month")
-- [ ] Fuzzy/typo-tolerant search
-- [ ] Search result ranking by relevance and recency
+- [x] Fuzzy/typo-tolerant search (FTS5 porter tokenizer with prefix matching)
+- [x] Search result ranking by relevance and recency (BM25 via FTS5 rank)
 
 ### 6.2 Quick Access / Priority
-- [ ] ML model to predict files a user is likely to need based on access patterns
-- [ ] "Quick Access" section on Drive home showing top predicted files
-- [ ] Suggested collaborators when sharing
-- [ ] Suggested actions on file cards (e.g. "reply to comment", "view changes")
+- [x] ML model to predict files a user is likely to need based on access patterns
+- [x] "Quick Access" section on Drive home showing top predicted files
+- [x] Suggested collaborators when sharing
+- [x] Suggested actions on file cards (e.g. "reply to comment", "view changes")
 
 ### 6.3 AI Writing Assistance (Docs)
 - [ ] Smart Compose: autocomplete sentences and phrases while typing
@@ -288,10 +288,10 @@ A phased roadmap for building a Google Drive-competitive cloud storage and colla
 - [ ] Auto-format: balance text and images on a slide
 
 ### 6.6 Drive-Level AI
-- [ ] Document summaries on hover/preview (AI-generated)
-- [ ] "Catch me up" on Drive home: summarize recent changes across all files
+- [x] Document summaries on hover/preview (AI-generated via Claude)
+- [x] "Catch me up" on Drive home: summarize recent changes across all files
 - [ ] AI-powered content classification: automatically label sensitive files
-- [ ] Answer questions about Drive content without opening files
+- [x] Answer questions about Drive content without opening files
 
 ### 6.7 Google Photo Advanced Feautures
 - [ ] Photo map: browse media by GPS location on an interactive map

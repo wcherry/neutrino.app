@@ -42,7 +42,7 @@ impl DriveJobsClient {
         &self.worker_secret
     }
 
-    pub fn base_url(&self) -> &str {
+    pub fn drive_base_url(&self) -> &str {
         &self.base_url
     }
 

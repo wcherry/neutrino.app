@@ -187,6 +187,19 @@ pub async fn upload_file(
             }
         }
 
+        // Enqueue content indexing job (best-effort)
+        let job_req = CreateJobRequest {
+            job_type: "index_content".to_string(),
+            payload: serde_json::json!({
+                "fileId": response.id,
+                "userId": user.user_id,
+            }),
+            timeout_secs: 60,
+        };
+        if let Err(e) = state.jobs_service.create_job(job_req) {
+            tracing::warn!("Failed to enqueue index_content job for file {}: {:?}", response.id, e);
+        }
+
         return Ok(web::Json(response));
     }
 

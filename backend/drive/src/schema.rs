@@ -239,6 +239,40 @@ diesel::table! {
     }
 }
 
+diesel::table! {
+    file_content_index (file_id) {
+        file_id -> Text,
+        user_id -> Text,
+        indexed_at -> Timestamp,
+        text_content -> Text,
+    }
+}
+
+diesel::table! {
+    file_access_scores (file_id) {
+        file_id -> Text,
+        user_id -> Text,
+        score -> Double,
+        computed_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    file_summaries (file_id) {
+        file_id -> Text,
+        summary -> Text,
+        generated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    file_classifications (file_id) {
+        file_id -> Text,
+        labels -> Text,
+        classified_at -> Timestamp,
+    }
+}
+
 diesel::joinable!(files -> folders (folder_id));
 diesel::joinable!(shortcuts -> files (target_file_id));
 diesel::joinable!(file_versions -> files (file_id));
@@ -259,4 +293,8 @@ diesel::allow_tables_to_appear_in_same_query!(
     comment_replies,
     notifications,
     file_activity_log,
+    file_content_index,
+    file_access_scores,
+    file_summaries,
+    file_classifications,
 );
