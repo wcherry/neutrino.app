@@ -9,11 +9,15 @@ use tracing::{error, info};
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
+mod ai;
 mod common;
 mod config;
 mod schema;
 mod sheets;
 
+use crate::ai::api::SheetsAIApiState;
+use crate::ai::claude_client::ClaudeClient;
+use crate::ai::service::SheetsAIService;
 use crate::common::TokenService;
 use crate::config::Config;
 use crate::sheets::api::{SheetsApiDoc, SheetsApiState};
@@ -102,6 +106,13 @@ async fn main() -> std::io::Result<()> {
     let sheets_service = Arc::new(SheetsService::new(sheets_repo, drive_client));
     let sheets_state = web::Data::new(SheetsApiState { sheets_service });
 
+    let claude_client = ClaudeClient::from_env();
+    if claude_client.is_none() {
+        info!("ANTHROPIC_API_KEY not set — AI features will return 503");
+    }
+    let ai_service = Arc::new(SheetsAIService::new(claude_client));
+    let ai_state = web::Data::new(SheetsAIApiState { ai_service });
+
     let token_service_data = web::Data::new(token_service.clone());
     let pool_data = web::Data::new(pool.clone());
     let bind_addr = format!("0.0.0.0:{}", config.port);
@@ -114,13 +125,15 @@ async fn main() -> std::io::Result<()> {
         App::new()
             .app_data(pool_data.clone())
             .app_data(sheets_state.clone())
+            .app_data(ai_state.clone())
             .app_data(token_service_data.clone())
             .wrap(Logger::default())
             .wrap(Cors::permissive())
             .service(health)
             .service(
                 web::scope("/api/v1")
-                    .configure(sheets::api::configure),
+                    .configure(sheets::api::configure)
+                    .configure(ai::api::configure),
             )
             .service(
                 SwaggerUi::new("/swagger-ui/{_:.*}")

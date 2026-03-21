@@ -276,16 +276,16 @@ A phased roadmap for building a Google Drive-competitive cloud storage and colla
 - [x] "Help me write" prompt: generate a draft from a user description
 
 ### 6.4 AI Data Assistance (Sheets)
-- [ ] Smart Fill: detect column patterns and auto-fill based on examples
-- [ ] Explore sidebar: natural language questions ("What is the sum of column B?") with chart/answer output
-- [ ] Auto-generate pivot table from a text prompt
-- [ ] Anomaly detection and data insights surfaced automatically
+- [x] Smart Fill: detect column patterns and auto-fill based on examples
+- [x] Explore sidebar: natural language questions ("What is the sum of column B?") with chart/answer output
+- [x] Auto-generate pivot table from a text prompt
+- [x] Anomaly detection and data insights surfaced automatically
 
 ### 6.5 AI Presentation Assistance (Slides)
-- [ ] Smart Compose: suggest completions for slide text
-- [ ] Image search from within editor (search web or Drive)
-- [ ] "Help me design": generate slide layout from a prompt
-- [ ] Auto-format: balance text and images on a slide
+- [x] Smart Compose: suggest completions for slide text
+- [x] Image search from within editor (search web or Drive)
+- [x] "Help me design": generate slide layout from a prompt
+- [x] Auto-format: balance text and images on a slide
 
 ### 6.6 Drive-Level AI
 - [x] Document summaries on hover/preview (AI-generated via Claude)

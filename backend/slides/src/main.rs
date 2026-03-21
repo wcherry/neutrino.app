@@ -9,11 +9,15 @@ use tracing::{error, info};
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
+mod ai;
 mod common;
 mod config;
 mod schema;
 mod slides;
 
+use crate::ai::api::SlidesAIApiState;
+use crate::ai::claude_client::ClaudeClient;
+use crate::ai::service::SlidesAIService;
 use crate::common::TokenService;
 use crate::config::Config;
 use crate::slides::api::{SlidesApiDoc, SlidesApiState};
@@ -102,6 +106,13 @@ async fn main() -> std::io::Result<()> {
     let slides_service = Arc::new(SlidesService::new(slides_repo, drive_client));
     let slides_state = web::Data::new(SlidesApiState { slides_service });
 
+    let claude_client = ClaudeClient::from_env();
+    if claude_client.is_none() {
+        info!("ANTHROPIC_API_KEY not set — AI features will return 503");
+    }
+    let ai_service = Arc::new(SlidesAIService::new(claude_client));
+    let ai_state = web::Data::new(SlidesAIApiState { ai_service });
+
     let token_service_data = web::Data::new(token_service.clone());
     let pool_data = web::Data::new(pool.clone());
     let bind_addr = format!("0.0.0.0:{}", config.port);
@@ -114,13 +125,15 @@ async fn main() -> std::io::Result<()> {
         App::new()
             .app_data(pool_data.clone())
             .app_data(slides_state.clone())
+            .app_data(ai_state.clone())
             .app_data(token_service_data.clone())
             .wrap(Logger::default())
             .wrap(Cors::permissive())
             .service(health)
             .service(
                 web::scope("/api/v1")
-                    .configure(slides::api::configure),
+                    .configure(slides::api::configure)
+                    .configure(ai::api::configure),
             )
             .service(
                 SwaggerUi::new("/swagger-ui/{_:.*}")

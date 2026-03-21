@@ -1787,6 +1787,115 @@ export const commentsApi = {
 };
 
 // ---------------------------------------------------------------------------
+// Sheets AI types
+// ---------------------------------------------------------------------------
+
+export interface SmartFillResponse {
+  values: string[];
+}
+
+export interface ExploreResponse {
+  answer: string;
+  formula: string | null;
+  chartConfig: unknown | null;
+}
+
+export interface Insight {
+  row: number;
+  col: number;
+  type: string;
+  message: string;
+}
+
+// ---------------------------------------------------------------------------
+// Sheets AI API
+// ---------------------------------------------------------------------------
+
+export const sheetsAI = {
+  async smartFill(
+    sheetId: string,
+    columnValues: string[],
+    examples: [string, string][]
+  ): Promise<SmartFillResponse> {
+    return request<SmartFillResponse>(`/api/v1/sheets/${sheetId}/ai/smart-fill`, {
+      method: 'POST',
+      body: JSON.stringify({ columnValues, examples }),
+    });
+  },
+
+  async explore(sheetId: string, question: string, sheetData: string): Promise<ExploreResponse> {
+    return request<ExploreResponse>(`/api/v1/sheets/${sheetId}/ai/explore`, {
+      method: 'POST',
+      body: JSON.stringify({ question, sheetData }),
+    });
+  },
+
+  async pivot(sheetId: string, prompt: string, sheetData: string): Promise<unknown> {
+    return request<unknown>(`/api/v1/sheets/${sheetId}/ai/pivot`, {
+      method: 'POST',
+      body: JSON.stringify({ prompt, sheetData }),
+    });
+  },
+
+  async insights(sheetId: string, sheetData: string): Promise<Insight[]> {
+    return request<Insight[]>(`/api/v1/sheets/${sheetId}/ai/insights`, {
+      method: 'POST',
+      body: JSON.stringify({ sheetData }),
+    });
+  },
+};
+
+// ---------------------------------------------------------------------------
+// Slides AI types
+// ---------------------------------------------------------------------------
+
+export interface ImageResult {
+  id: string;
+  name: string;
+  mimeType: string;
+  sizeBytes: number;
+  url: string;
+}
+
+export interface ImageSearchResponse {
+  images: ImageResult[];
+}
+
+// ---------------------------------------------------------------------------
+// Slides AI API
+// ---------------------------------------------------------------------------
+
+export const slidesAI = {
+  async complete(slideId: string, slideText: string): Promise<{ text: string }> {
+    return request<{ text: string }>(`/api/v1/slides/${slideId}/ai/complete`, {
+      method: 'POST',
+      body: JSON.stringify({ slideText }),
+    });
+  },
+
+  async imageSearch(slideId: string, query: string): Promise<ImageSearchResponse> {
+    return request<ImageSearchResponse>(`/api/v1/slides/${slideId}/ai/image-search`, {
+      method: 'POST',
+      body: JSON.stringify({ query }),
+    });
+  },
+
+  async design(slideId: string, slideContent: string): Promise<unknown> {
+    return request<unknown>(`/api/v1/slides/${slideId}/ai/design`, {
+      method: 'POST',
+      body: JSON.stringify({ slideContent }),
+    });
+  },
+
+  async autoformat(slideId: string, slideJson: string): Promise<unknown> {
+    return request<unknown>(`/api/v1/slides/${slideId}/ai/autoformat`, {
+      method: 'POST',
+      body: JSON.stringify({ slideJson }),
+    });
+  },
+};
+
+// ---------------------------------------------------------------------------
 // Convenience re-exports
 // ---------------------------------------------------------------------------
 
