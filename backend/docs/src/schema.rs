@@ -15,3 +15,17 @@ diesel::table! {
         updated_at -> Timestamp,
     }
 }
+
+diesel::table! {
+    doc_templates (id) {
+        id -> Text,
+        name -> Text,
+        description -> Nullable<Text>,
+        is_system -> Integer,
+        is_default -> Integer,
+        category -> Nullable<Text>,
+        content_json -> Text,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}

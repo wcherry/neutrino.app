@@ -9,12 +9,16 @@ use tracing::{error, info};
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
+mod ai;
 mod collab;
 mod common;
 mod config;
 mod docs;
 mod schema;
+mod templates;
 
+use crate::ai::api::DocsAIState;
+use crate::ai::service::DocsAIService;
 use crate::collab::repository::CollabRepository;
 use crate::collab::state::CollabState;
 use crate::common::TokenService;
@@ -22,6 +26,9 @@ use crate::config::Config;
 use crate::docs::api::{DocsApiDoc, DocsApiState};
 use crate::docs::repository::DocsRepository;
 use crate::docs::service::DocsService;
+use crate::templates::api::TemplatesApiState;
+use crate::templates::repository::TemplatesRepository;
+use crate::templates::service::TemplatesService;
 use shared::drive_client::DriveClient;
 
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
@@ -105,7 +112,26 @@ async fn main() -> std::io::Result<()> {
 
     let docs_repo = Arc::new(DocsRepository::new(pool.clone()));
     let docs_service = Arc::new(DocsService::new(docs_repo, drive_client));
-    let docs_state = web::Data::new(DocsApiState { docs_service });
+    let docs_state = web::Data::new(DocsApiState {
+        docs_service: docs_service.clone(),
+    });
+
+    let ai_service = Arc::new(DocsAIService::new());
+    let ai_state = web::Data::new(DocsAIState {
+        ai_service,
+    });
+
+    let templates_repo = Arc::new(TemplatesRepository::new(pool.clone()));
+    let templates_service = Arc::new(TemplatesService::new(templates_repo, docs_service));
+
+    // Seed system templates at startup
+    templates_service.seed_system_templates().unwrap_or_else(|e| {
+        error!("Failed to seed system templates: {}", e);
+    });
+
+    let templates_state = web::Data::new(TemplatesApiState {
+        templates_service,
+    });
 
     let collab_repo = web::Data::new(Arc::new(CollabRepository::new(pool.clone())));
     let collab_state = web::Data::new(Arc::new(CollabState::new()));
@@ -122,6 +148,8 @@ async fn main() -> std::io::Result<()> {
         App::new()
             .app_data(pool_data.clone())
             .app_data(docs_state.clone())
+            .app_data(ai_state.clone())
+            .app_data(templates_state.clone())
             .app_data(token_service_data.clone())
             .app_data(collab_repo.clone())
             .app_data(collab_state.clone())
@@ -131,7 +159,9 @@ async fn main() -> std::io::Result<()> {
             .service(
                 web::scope("/api/v1")
                     .configure(docs::api::configure)
-                    .configure(collab::api::configure),
+                    .configure(collab::api::configure)
+                    .configure(ai::api::configure)
+                    .configure(templates::api::configure),
             )
             .service(
                 SwaggerUi::new("/swagger-ui/{_:.*}")

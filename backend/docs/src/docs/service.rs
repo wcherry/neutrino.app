@@ -164,6 +164,17 @@ impl DocsService {
         })
     }
 
+    pub async fn write_content(
+        &self,
+        user: &AuthenticatedUser,
+        doc_id: &str,
+        content: &str,
+    ) -> Result<(), ApiError> {
+        self.drive
+            .upload_content(&user.token, doc_id, content, "write_doc_content")
+            .await
+    }
+
     pub async fn export_text(
         &self,
         user: &AuthenticatedUser,

@@ -1081,6 +1081,143 @@ export const docsApi = {
 };
 
 // ---------------------------------------------------------------------------
+// Docs AI types & API
+// ---------------------------------------------------------------------------
+
+export interface GrammarIssue {
+  offset: number;
+  length: number;
+  message: string;
+  suggestion: string;
+}
+
+export interface GrammarCheckResponse {
+  issues: GrammarIssue[];
+}
+
+export interface SmartComposeResponse {
+  completion: string;
+}
+
+export interface TranslateResponse {
+  translated: string;
+}
+
+export interface SummarizeResponse {
+  summary: string;
+}
+
+export const docsAI = {
+  async smartCompose(docId: string, context: string): Promise<SmartComposeResponse> {
+    return request<SmartComposeResponse>(`/api/v1/docs/${docId}/ai/complete`, {
+      method: 'POST',
+      body: JSON.stringify({ context }),
+    });
+  },
+
+  async grammarCheck(docId: string, text: string): Promise<GrammarCheckResponse> {
+    return request<GrammarCheckResponse>(`/api/v1/docs/${docId}/ai/grammar`, {
+      method: 'POST',
+      body: JSON.stringify({ text }),
+    });
+  },
+
+  async translate(docId: string, content: string, targetLang: string): Promise<TranslateResponse> {
+    return request<TranslateResponse>(`/api/v1/docs/${docId}/ai/translate`, {
+      method: 'POST',
+      body: JSON.stringify({ content, targetLang }),
+    });
+  },
+
+  async helpMeWrite(description: string): Promise<SmartComposeResponse> {
+    return request<SmartComposeResponse>('/api/v1/docs/ai/help-me-write', {
+      method: 'POST',
+      body: JSON.stringify({ description }),
+    });
+  },
+
+  async summarize(docId: string, content: string): Promise<SummarizeResponse> {
+    return request<SummarizeResponse>(`/api/v1/docs/${docId}/ai/summarize`, {
+      method: 'POST',
+      body: JSON.stringify({ content }),
+    });
+  },
+};
+
+// ---------------------------------------------------------------------------
+// Docs Templates types & API
+// ---------------------------------------------------------------------------
+
+export interface DocTemplate {
+  id: string;
+  name: string;
+  description: string | null;
+  isSystem: boolean;
+  isDefault: boolean;
+  category: string | null;
+  contentJson: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ListTemplatesResponse {
+  templates: DocTemplate[];
+}
+
+export interface CreateTemplateRequest {
+  name: string;
+  description?: string;
+  category?: string;
+  contentJson?: string;
+}
+
+export interface UpdateTemplateRequest {
+  name?: string;
+  description?: string;
+  isDefault?: boolean;
+  category?: string;
+}
+
+export interface UseTemplateResponse {
+  docId: string;
+}
+
+export const docsTemplates = {
+  async list(): Promise<ListTemplatesResponse> {
+    return request<ListTemplatesResponse>('/api/v1/docs/templates');
+  },
+
+  async create(req: CreateTemplateRequest): Promise<DocTemplate> {
+    return request<DocTemplate>('/api/v1/docs/templates', {
+      method: 'POST',
+      body: JSON.stringify(req),
+    });
+  },
+
+  async get(id: string): Promise<DocTemplate> {
+    return request<DocTemplate>(`/api/v1/docs/templates/${id}`);
+  },
+
+  async update(id: string, req: UpdateTemplateRequest): Promise<DocTemplate> {
+    return request<DocTemplate>(`/api/v1/docs/templates/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(req),
+    });
+  },
+
+  async delete(id: string): Promise<void> {
+    return request<void>(`/api/v1/docs/templates/${id}`, { method: 'DELETE' });
+  },
+
+  async use(id: string, title?: string): Promise<UseTemplateResponse> {
+    return request<UseTemplateResponse>(`/api/v1/docs/templates/${id}/use`, {
+      method: 'POST',
+      body: JSON.stringify({ title }),
+    });
+  },
+};
+
+// ---------------------------------------------------------------------------
 // Sheets API
 // ---------------------------------------------------------------------------
 

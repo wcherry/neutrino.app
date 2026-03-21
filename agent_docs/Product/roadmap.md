@@ -268,12 +268,12 @@ A phased roadmap for building a Google Drive-competitive cloud storage and colla
 - [x] Suggested actions on file cards (e.g. "reply to comment", "view changes")
 
 ### 6.3 AI Writing Assistance (Docs)
-- [ ] Smart Compose: autocomplete sentences and phrases while typing
-- [ ] Grammar and style suggestions inline
+- [x] Smart Compose: autocomplete sentences and phrases while typing
+- [x] Grammar and style suggestions inline
 - [ ] Voice typing: dictate text via microphone
-- [ ] Translate entire document to another language
+- [x] Translate entire document to another language
 - [ ] Explore panel: suggest relevant web content and Drive files; auto-cite sources
-- [ ] "Help me write" prompt: generate a draft from a user description
+- [x] "Help me write" prompt: generate a draft from a user description
 
 ### 6.4 AI Data Assistance (Sheets)
 - [ ] Smart Fill: detect column patterns and auto-fill based on examples
@@ -304,7 +304,7 @@ A phased roadmap for building a Google Drive-competitive cloud storage and colla
 - [ ] Free up space: identify backed-up photos and offer to delete local device copies
 
 ### 6.8 Google Docs Advanced Features
-- [ ] Template support: Can create, edit, use, and select a default template
+- [x] Template support: Can create, edit, use, and select a default template
 
 ---
 
