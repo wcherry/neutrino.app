@@ -427,8 +427,6 @@ pub fn configure_photos(cfg: &mut web::ServiceConfig) {
         .service(update_photo)
         .service(trash_photo)
         .service(restore_photo)
-        .service(put_thumbnail)
-        .service(get_thumbnail)
         .service(put_metadata)
         .service(put_photo_edits)
         .service(get_photo_edits)
