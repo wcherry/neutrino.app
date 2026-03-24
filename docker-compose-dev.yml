@@ -9,15 +9,6 @@ secrets:
     file: ./secrets/anthropic_api_key.txt
 
 services:
-  nginx-proxy:
-    image: nginx:1.27-alpine
-    container_name: neutrino-nginx-proxy
-    ports:
-      - "8880:8080"
-    volumes:
-      - ./apps/neutrino-proxy-dev.conf:/etc/nginx/conf.d/default.conf:ro
-    restart: unless-stopped
-
   web:
     build: ./apps
     container_name: neutrino-nginx-web
@@ -207,9 +198,9 @@ services:
       WORKER_DATABASE_URL: /usr/local/data/workers.db
       WORKER_PORT: 8080
       LOG_PATH: /usr/local/logs/
-      FACE_DETECT_MODEL_PATH: /usr/local/model
-      FACE_RECOGNITION_MODEL_PATH: /usr/local/model
+      FACE_DETECT_MODEL_PATH: /usr/local/models/det_10g.onnx
+      FACE_RECOGNITION_MODEL_PATH: /usr/local/models/w600k_r50.onnx
     volumes:
       - ./logs/photos:/usr/local/logs
       - ./data/drive:/usr/local/data
-      - ./data/models:/usr/local/model
+      - ./data/models:/usr/local/models
