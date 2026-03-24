@@ -313,43 +313,43 @@ A phased roadmap for building a Google Drive-competitive cloud storage and colla
 **Goal:** Enterprise and team administrators can govern data, enforce policies, and maintain compliance.
 
 ### 7.1 Core Security
-- [ ] Encryption at rest (AES-256) and in transit (TLS 1.3)
-- [ ] Two-factor authentication (TOTP, hardware keys)
+- [x] Encryption at rest (AES-256) and in transit (TLS 1.3)
+- [x] Two-factor authentication (TOTP, hardware keys)
 - [ ] SAML SSO integration
-- [ ] Session management: revoke active sessions per device
+- [x] Session management: revoke active sessions per device
 
 ### 7.2 Admin Console
-- [ ] Org-level admin panel: manage users, groups, and storage allocation
-- [ ] Enforce sharing policies (block external shares, restrict to domain)
+- [x] Org-level admin panel: manage users, groups, and storage allocation
+- [x] Enforce sharing policies (block external shares, restrict to domain)
 - [ ] Context-Aware Access: device-signal-based access policies (managed device required, etc.)
-- [ ] Enforce 2FA org-wide
-- [ ] Set default IRM restrictions for all files
+- [x] Enforce 2FA org-wide
+- [x] Set default IRM restrictions for all files
 
 ### 7.3 Shared Drives (Team Drives)
-- [ ] Create team-owned drives not tied to any individual
-- [ ] Roles: Manager, Content Manager, Contributor, Commenter, Viewer
-- [ ] Add/remove members per shared drive
-- [ ] File ownership stays with the drive if a member leaves
-- [ ] Shared drive storage analytics (used space, contributor breakdown)
+- [x] Create team-owned drives not tied to any individual
+- [x] Roles: Manager, Content Manager, Contributor, Commenter, Viewer
+- [x] Add/remove members per shared drive
+- [x] File ownership stays with the drive if a member leaves
+- [x] Shared drive storage analytics (used space, contributor breakdown)
 
 ### 7.4 Data Loss Prevention (DLP)
-- [ ] Define DLP rules: detect sensitive content (SSN, credit card, PII patterns)
-- [ ] Auto-restrict sharing of files matching DLP rules
-- [ ] Notify admins when DLP violation occurs
+- [x] Define DLP rules: detect sensitive content (SSN, credit card, PII patterns)
+- [x] Auto-restrict sharing of files matching DLP rules
+- [x] Notify admins when DLP violation occurs
 - [ ] AI-powered content classification to auto-label sensitive files
 
 ### 7.5 Audit & Compliance
-- [ ] Drive audit log: record all file actions (view, edit, download, share, delete)
-- [ ] Admin access to audit logs via console and export (CSV, API)
-- [ ] Legal hold / data retention policies (archive files beyond normal deletion)
-- [ ] eDiscovery: search archived data across all users
+- [x] Drive audit log: record all file actions (view, edit, download, share, delete)
+- [x] Admin access to audit logs via console and export (CSV, API)
+- [x] Legal hold / data retention policies (archive files beyond normal deletion)
+- [x] eDiscovery: search archived data across all users
 - [ ] Compliance certifications: target SOC 2 Type II, ISO 27001, GDPR, HIPAA
 
 ### 7.6 Advanced Security (Enterprise)
-- [ ] Customer-managed encryption keys (CMEK)
-- [ ] Ransomware detection: identify mass-encryption events and offer snapshot restore
+- [x] Customer-managed encryption keys (CMEK)
+- [x] Ransomware detection: identify mass-encryption events and offer snapshot restore
 - [ ] Security Command Center integration for threat detection
-- [ ] Audit export to SIEM systems
+- [x] Audit export to SIEM systems
 
 ---
 
